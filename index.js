@@ -25,7 +25,9 @@ module.exports = db; // 👈 Esto permite usar `db` en otros archivos (como ruta
 
 // Middleware
 app.use(bodyParser.json());
-app.use(cors());
+app.use(cors({
+  origin: '*' // Permitir todos los orígenes
+}));
 
 // Rutas
 app.use('/api/citas', citasRoutes);
@@ -33,6 +35,6 @@ app.use('/api/comentarios', comentariosRoutes);
 app.use('/api/blog', blogsRoutes);
 
 // Iniciar servidor
-app.listen(port, () => {
+app.listen(port, '0.0.0.0', () => {
   console.log(`Servidor corriendo en http://localhost:${port}`);
 });
