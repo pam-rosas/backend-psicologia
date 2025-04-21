@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "psicoterapia-7fb0d",
+  "private_key_id": "9bbf5403480b3db19ace85b5b832b019c5e8cc82",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDAtoZXRfTL43N5\nHBKaZChUkRcOAuZPUkMvun7dZBQzX3dlRZXmgGQWaJj7vqlY+4tNo5E2e1jX2ELQ\n76jqnNfggh7zXmOJCR3ue8TU/htUUOahF+uTuL6K5qJQtWCjn70J7IqUXsGodoFR\nRoPmBqS39HhfnPqPtScKENJznYrvNxU7lJW3Tibnxdb5ouXhPaMdalD/VD27p3PM\ner4++Djk8IbGBVYXWk1ZuGShWOQFsSg8M0mGNnZMDY9IDzsHD9yhuxzWL4jHBfyA\nBlDlYZFXOJ98Zhqek7y6yqBadCzpSFrQ7f/UowMpMj60APs87aSi1BAZ6jPdgMBy\nBX8d6ZANAgMBAAECggEACIEFdJx1rPmggtumRoHc9b5hUhD2sNFkfZqxNnvQGGRC\nFIn5j25i/EopVhKXzoFrKEXrhofy57N3X1j0D0ZUkGetjffAVK++TmPPz8ZW1mWr\nh7hSgPZKEj8TMpSOayoFYYa6psl3qkNweXGvKFtqsWNsXGvE8sp/qoYLg2aUVvH3\nsj4HPtUlS1t+u0Ywbjt3da1Agv2P2KgludocMctFnc+pWVuYnrWgAghzHGUZwOsU\n0jNKoYDnv0zmdFsrualikd6yvDmWw0HPduQOjLIHBaUA5y31iiGzkTuEICtG2O4j\nD8JICJfrxwx7lfi69aWesRxlp9rO9GFsJz/bvgoaUQKBgQDoh5udv2gh5g8fGIDv\nx5TtVuO/HDXB88iWsfvytdu7GPKu1eW+zgtI//ewHj15BCkOxIDlp9Eg20LB0HIU\nJhrbQhR/TVmc6qx98te5liiU8XhB22FqJSsMdKzkm14kugIrY1cX9se3LJXC/bml\nPsMlNu7FcrJQsJK0iGFNl9mHkwKBgQDUKhUp0UTm3YcWLHhiDrEO5wm9aub+8rb+\n6xAkEGrLmT626xUlxs70F9pzpASREWQu8/gSAX2nkaoSZtQG8BWPbP5fqnHOZa6W\nNnmHTyvo87w+zsueaHrzSheYAx9TOznLDjkXxF3raf+/H8Q+acFOURDz4Zm4DKzZ\nOD8ECI4N3wKBgQDYLwuM06F6sqsoW920D7f0GK5QxWdtVLsO75awBketYPpvdcnN\nZT60tdWP1e2ND0MkyaiU2zrg8zjTfHozJWIeqwbnfABulPedeSL7FhHQt9b4U3/z\n8W5efDMprxEN0CmoMQmN7A+tyzPJP59TdFB1zuaah5Ik1qTuV0UvoJfLJQKBgHxv\nqjX6nXTinSZuMrUgdMyOyXGlT5JcfOQKrk7Yqip72QKj4qVjc2JK0z9cBamoD6BS\nSz8UTMSJdLySPu1Kxvp2LMOjTliF3t4PWTv5PYHF4rTbySVBlks3O5tWyXqhlAX6\nc5XzADrg0rUgRpNsp4ntlgnUWbpPBNnqWVteQSL1AoGBAL0BSdgvnlkJsIkf2Ggh\n7W40S/MTiGJmKYlE00MUglzMCIem7v0gl2QdJn5ySVBHjFegQmyoFT1Ej+3pyF01\nfafR6mCLMqEB7TDz2+vqMVjYM/33QvmSH3DHrepK94xi1SinPC/boWY0k5MaVzI5\nGxq5ydu/zzvZUVWzqUv7kWFh\n-----END PRIVATE KEY-----\n",
+  "client_email": "firebase-adminsdk-fbsvc@psicoterapia-7fb0d.iam.gserviceaccount.com",
+  "client_id": "114019932203655106575",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40psicoterapia-7fb0d.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}
