@@ -10,7 +10,7 @@ const tratamientos = {
     sesiones: 4, // 4 sesiones de 1 hora
   },
   'Psicoterapia e hipnoterapia': {
-    precioNacional: 48000,
+    precioNacional: 40000,
     precioInternacional: 50, // USD por sesión
     sesiones: 1, // Una sola sesión
   }

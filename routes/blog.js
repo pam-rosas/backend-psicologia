@@ -32,5 +32,20 @@ router.get('/obtener', async (req, res) => {
     res.status(500).json({ message: 'Error al obtener los blogs', error });
   }
 });
+// Ruta para editar un blog existente
+router.put('/editar/:id', async (req, res) => {
+  try {
+    const blogId = req.params.id;
+    const { titulo, texto, imagen } = req.body;
+
+    const blogRef = db.collection('blogs').doc(blogId);
+    await blogRef.update({ titulo, texto, imagen });
+
+    res.status(200).json({ message: 'Blog actualizado exitosamente' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error al actualizar el blog', error });
+  }
+});
+
 
 module.exports = router;
