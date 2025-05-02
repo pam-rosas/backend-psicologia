@@ -3,14 +3,14 @@ const router = express.Router();
 const db = require('../firebase/config');
 const nodemailer = require('nodemailer');
 const moment = require('moment-timezone');
-const zonaHoraria = 'America/Santiago';  // O la zona horaria que necesitas
+const zonaHoraria = 'America/Santiago';
 
 // Configura el transporte SMTP para Gmail
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
     user: 'eduardo@emhpsicoterapia.cl',
-    pass: 'fhiu rxhd ycfr hczr'  // Asegúrate de usar la contraseña correcta o un token de aplicación
+    pass: 'fhiu rxhd ycfr hczr'  // Usa una clave de aplicación válida
   }
 });
 
@@ -61,19 +61,15 @@ router.post('/reservar', async (req, res) => {
     return res.status(400).json({ error: 'Tratamiento inválido' });
   }
 
-  const precio = tratamientos[tratamiento];
-  
-  // Aquí convertimos la fecha_hora al formato adecuado
-  const fecha = moment.tz(fecha_hora, zonaHoraria).toDate();
-
-  if (isNaN(fecha.getTime())) {
+  const fecha = moment.tz(fecha_hora, zonaHoraria);
+  if (!fecha.isValid()) {
     return res.status(400).json({ error: 'Fecha y hora inválidas' });
   }
 
-  const diaSemana = fecha.getDay();
+  const diaSemana = fecha.day();
   const dias = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
   const dia = dias[diaSemana];
-  const horaSeleccionada = `${fecha.getHours()}:${fecha.getMinutes() < 10 ? '0' : ''}${fecha.getMinutes()}`;
+  const horaSeleccionada = `${String(fecha.hour()).padStart(2, '0')}:${String(fecha.minute()).padStart(2, '0')}`;
 
   if (dia === 'domingo') {
     return res.status(400).json({ error: 'No se trabaja los domingos' });
@@ -87,15 +83,19 @@ router.post('/reservar', async (req, res) => {
     const nuevaCita = await db.collection('citas').add({
       nombre,
       correo,
-      fecha_hora,
+      fecha_hora: fecha.toDate(),  // Guardar como timestamp
       tratamiento,
-      precio,
+      precio: {
+        nacional: tratamientos[tratamiento].precioNacional,
+        internacional: tratamientos[tratamiento].precioInternacional,
+        sesiones: tratamientos[tratamiento].sesiones
+      },
       estado: 'pendiente',
     });
 
     console.log('Cita guardada con ID:', nuevaCita.id);
 
-    // Enviar correo de confirmación al cliente
+    // Enviar correo al cliente
     const mailOptionsCliente = {
       from: 'eduardo@emhpsicoterapia.cl',
       to: correo,
@@ -103,9 +103,9 @@ router.post('/reservar', async (req, res) => {
       html: `
         <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #f9f9f9; border-radius: 10px; color: #333;">
           <h2 style="color: #6a1b9a;">Hola ${nombre},</h2>
-          <p>¡Gracias por reservar tu espacio con la Psicólogo Eduardo!</p>
+          <p>¡Gracias por reservar tu espacio con el Psicólogo Eduardo!</p>
           <p><strong>🗓️ Tratamiento:</strong> ${tratamiento}</p>
-          <p><strong>📅 Fecha:</strong> ${fecha.toLocaleDateString()}</p>
+          <p><strong>📅 Fecha:</strong> ${fecha.format('DD/MM/YYYY')}</p>
           <p><strong>🕒 Hora:</strong> ${horaSeleccionada} hrs</p>
           <p>Tu cita ha sido agendada con éxito. Recibirás un recordatorio el día anterior.</p>
           <br />
@@ -116,7 +116,6 @@ router.post('/reservar', async (req, res) => {
         </div>
       `
     };
-    
 
     transporter.sendMail(mailOptionsCliente, (error, info) => {
       if (error) {
@@ -126,9 +125,10 @@ router.post('/reservar', async (req, res) => {
       }
     });
 
+    // Enviar correo al psicólogo
     const mailOptionsPsicologo = {
       from: 'eduardo@emhpsicoterapia.cl',
-      to: 'eduardo@emhpsicoterapia.cl',  // Tu correo real
+      to: 'eduardo@emhpsicoterapia.cl',
       subject: '📥 Nueva cita reservada',
       html: `
         <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #eef6f9; border-radius: 10px; color: #333;">
@@ -136,14 +136,12 @@ router.post('/reservar', async (req, res) => {
           <p><strong>👤 Nombre del paciente:</strong> ${nombre}</p>
           <p><strong>✉️ Correo:</strong> ${correo}</p>
           <p><strong>💆‍♀️ Tratamiento:</strong> ${tratamiento}</p>
-          <p><strong>🗓️ Fecha:</strong> ${fecha.toLocaleDateString()}</p>
+          <p><strong>🗓️ Fecha:</strong> ${fecha.format('DD/MM/YYYY')}</p>
           <p><strong>🕒 Hora:</strong> ${horaSeleccionada} hrs</p>
-          <br />
-          <p style="font-size: 14px; color: #666;">Por favor, revisa la plataforma si deseas ver más detalles o confirmar la disponibilidad.</p>
         </div>
       `
     };
-    
+
     transporter.sendMail(mailOptionsPsicologo, (error, info) => {
       if (error) {
         console.error('Error al enviar correo al psicólogo:', error);
@@ -156,9 +154,13 @@ router.post('/reservar', async (req, res) => {
       id: nuevaCita.id,
       nombre,
       correo,
-      fecha_hora,
+      fecha_hora: fecha.toDate(),
       tratamiento,
-      precio,
+      precio: {
+        nacional: tratamientos[tratamiento].precioNacional,
+        internacional: tratamientos[tratamiento].precioInternacional,
+        sesiones: tratamientos[tratamiento].sesiones
+      },
       estado: 'pendiente',
     });
 
@@ -167,190 +169,5 @@ router.post('/reservar', async (req, res) => {
     return res.status(500).send('Error al crear la cita.');
   }
 });
-
-// Obtener todas las citas
-router.get('/ver', async (req, res) => {
-  try {
-    const snapshot = await db.collection('citas').get();
-    const citas = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-    return res.status(200).json(citas);
-  } catch (error) {
-    console.error('Error al obtener citas:', error);
-    return res.status(500).send('Error al obtener citas.');
-  }
-});
-// Reagendar una cita
-router.put('/reagendar/:id', async (req, res) => {
-  const id = req.params.id;
-  const { nueva_fecha_hora } = req.body;
-
-  if (!nueva_fecha_hora) {
-    return res.status(400).json({ error: 'Nueva fecha y hora requerida' });
-  }
-
-  const nuevaFecha = moment.tz(nueva_fecha_hora, zonaHoraria).toDate();
-
-  if (isNaN(nuevaFecha.getTime())) {
-    return res.status(400).json({ error: 'Fecha inválida' });
-  }
-
-  const diaSemana = nuevaFecha.getDay();
-  const dias = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
-  const dia = dias[diaSemana];
-  const hora = `${nuevaFecha.getHours()}:${nuevaFecha.getMinutes().toString().padStart(2, '0')}`;
-
-  if (dia === 'domingo') {
-    return res.status(400).json({ error: 'No se trabaja los domingos' });
-  }
-
-  if (!esHorarioValido(dia, hora)) {
-    return res.status(400).json({ error: 'Horario no disponible para este día' });
-  }
-
-  try {
-    // Obtener los datos actuales de la cita
-    const citaRef = await db.collection('citas').doc(id).get();
-    const cita = citaRef.data();
-
-    // Actualizar la cita en la base de datos
-    await db.collection('citas').doc(id).update({
-      fecha_hora: nueva_fecha_hora,
-      estado: 'reagendada',
-    });
-
-    // Enviar correo al cliente
-    const mailOptionsCliente = {
-      from: 'eduardo@emhpsicoterapia.cl',
-      to: cita.correo,
-      subject: '🌿 Reprogramación de tu cita con la Psicólogo Eduardo',
-      html: `
-        <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #f9f9f9; border-radius: 10px; color: #333;">
-          <h2 style="color: #6a1b9a;">Hola ${cita.nombre},</h2>
-          <p>Tu cita ha sido reprogramada.</p>
-          <p><strong>🗓️ Tratamiento:</strong> ${cita.tratamiento}</p>
-          <p><strong>📅 Nueva Fecha:</strong> ${nuevaFecha.toLocaleDateString()}</p>
-          <p><strong>🕒 Nueva Hora:</strong> ${hora} hrs</p>
-          <br />
-          <p>Si tienes cualquier duda o necesitas más cambios, no dudes en responder a este correo.</p>
-          <br />
-          <p>Con cariño,</p>
-          <p><strong>Psicólogo Eduardo</strong></p>
-        </div>
-      `
-    };
-
-    transporter.sendMail(mailOptionsCliente, (error, info) => {
-      if (error) {
-        console.error('Error al enviar correo al cliente:', error);
-      } else {
-        console.log('Correo al cliente enviado:', info.response);
-      }
-    });
-
-    // Enviar correo al psicólogo
-    const mailOptionsPsicologo = {
-      from: 'eduardo@emhpsicoterapia.cl',
-      to: 'eduardo@emhpsicoterapia.cl',  // Tu correo real
-      subject: '📥 Cita reprogramada',
-      html: `
-        <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #eef6f9; border-radius: 10px; color: #333;">
-          <h2 style="color: #00796b;">Cita reprogramada</h2>
-          <p><strong>👤 Nombre del paciente:</strong> ${cita.nombre}</p>
-          <p><strong>✉️ Correo:</strong> ${cita.correo}</p>
-          <p><strong>💆‍♀️ Tratamiento:</strong> ${cita.tratamiento}</p>
-          <p><strong>🗓️ Nueva Fecha:</strong> ${nuevaFecha.toLocaleDateString()}</p>
-          <p><strong>🕒 Nueva Hora:</strong> ${hora} hrs</p>
-        </div>
-      `
-    };
-
-    transporter.sendMail(mailOptionsPsicologo, (error, info) => {
-      if (error) {
-        console.error('Error al enviar correo al psicólogo:', error);
-      } else {
-        console.log('Correo al psicólogo enviado:', info.response);
-      }
-    });
-
-    return res.status(200).json({ mensaje: 'Cita reagendada con éxito' });
-
-  } catch (error) {
-    console.error('Error al reagendar cita:', error);
-    res.status(500).send('Error al reagendar la cita');
-  }
-});
-// Cancelar una cita
-router.delete('/cancelar/:id', async (req, res) => {
-  const id = req.params.id;
-
-  try {
-    // Obtener los datos actuales de la cita
-    const citaRef = await db.collection('citas').doc(id).get();
-    const cita = citaRef.data();
-
-    // Eliminar la cita de la base de datos
-    await db.collection('citas').doc(id).delete();
-
-    // Enviar correo al cliente
-    const mailOptionsCliente = {
-      from: 'eduardo@emhpsicoterapia.cl',
-      to: cita.correo,
-      subject: '🌿 Cancelación de tu cita con la Psicólogo Eduardo',
-      html: `
-        <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #f9f9f9; border-radius: 10px; color: #333;">
-          <h2 style="color: #6a1b9a;">Hola ${cita.nombre},</h2>
-          <p>Lamentablemente, tu cita ha sido cancelada.</p>
-          <p><strong>🗓️ Tratamiento:</strong> ${cita.tratamiento}</p>
-          <p><strong>📅 Fecha:</strong> ${cita.fecha_hora}</p>
-          <br />
-          <p>Si deseas agendar otra cita, no dudes en contactarnos.</p>
-          <br />
-          <p>Con cariño,</p>
-          <p><strong>Psicólogo Eduardo</strong></p>
-        </div>
-      `
-    };
-
-    transporter.sendMail(mailOptionsCliente, (error, info) => {
-      if (error) {
-        console.error('Error al enviar correo al cliente:', error);
-      } else {
-        console.log('Correo al cliente enviado:', info.response);
-      }
-    });
-
-    // Enviar correo al psicólogo
-    const mailOptionsPsicologo = {
-      from: 'eduardo@emhpsicoterapia.cl',
-      to: 'eduardo@emhpsicoterapia.cl',  // Tu correo real
-      subject: '📥 Cita cancelada',
-      html: `
-        <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #eef6f9; border-radius: 10px; color: #333;">
-          <h2 style="color: #00796b;">Cita cancelada</h2>
-          <p><strong>👤 Nombre del paciente:</strong> ${cita.nombre}</p>
-          <p><strong>✉️ Correo:</strong> ${cita.correo}</p>
-          <p><strong>💆‍♀️ Tratamiento:</strong> ${cita.tratamiento}</p>
-          <p><strong>🗓️ Fecha:</strong> ${cita.fecha_hora}</p>
-        </div>
-      `
-    };
-
-    transporter.sendMail(mailOptionsPsicologo, (error, info) => {
-      if (error) {
-        console.error('Error al enviar correo al psicólogo:', error);
-      } else {
-        console.log('Correo al psicólogo enviado:', info.response);
-      }
-    });
-
-    return res.status(200).json({ mensaje: 'Cita cancelada con éxito' });
-
-  } catch (error) {
-    console.error('Error al cancelar cita:', error);
-    res.status(500).send('Error al cancelar la cita');
-  }
-});
-
 
 module.exports = router;
