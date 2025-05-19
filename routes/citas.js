@@ -80,9 +80,7 @@ router.post('/reservar', async (req, res) => {
     return res.status(400).json({ error: 'No se trabaja los domingos' });
   }
 
-  if (!esHorarioValido(dia, horaSeleccionada)) {
-    return res.status(400).json({ error: 'La hora seleccionada no está disponible para este día' });
-  }
+ 
 
   try {
     // 🔍 VERIFICAR HORA OCUPADA
