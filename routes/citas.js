@@ -214,9 +214,6 @@ router.put('/reagendar/:id', async (req, res) => {
     return res.status(400).json({ error: 'No se trabaja los domingos' });
   }
 
-  if (!esHorarioValido(dia, hora)) {
-    return res.status(400).json({ error: 'Horario no disponible para este día' });
-  }
 
   try {
     // Obtener los datos actuales de la cita
