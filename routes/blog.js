@@ -46,6 +46,19 @@ router.put('/editar/:id', async (req, res) => {
     res.status(500).json({ message: 'Error al actualizar el blog', error });
   }
 });
+// Ruta para eliminar un blog
+router.delete('/eliminar/:id', async (req, res) => {
+  try {
+    const blogId = req.params.id;
+
+    const blogRef = db.collection('blogs').doc(blogId);
+    await blogRef.delete();
+
+    res.status(200).json({ message: 'Blog eliminado exitosamente' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error al eliminar el blog', error });
+  }
+});
 
 
 module.exports = router;
