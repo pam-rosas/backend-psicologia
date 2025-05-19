@@ -9,12 +9,13 @@ const zonaHoraria = 'America/Santiago';  // O la zona horaria que necesitas
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: 'eduardo@emhpsicoterapia.cl',
-    pass: 'fhiu rxhd ycfr hczr'  // Asegúrate de usar la contraseña correcta o un token de aplicación
+    user: 'pam.latasoft@gmail.com',
+    pass: 'rjef xrxc ercx ragf'  // eduardo@emhpsicoterapia.cl Asegúrate de usar la contraseña correcta o un token de aplicación
   }
 });
+//fhiu rxhd ycfr hczr
 
-// Verifica la conexión con el servidor de correo
+// 
 transporter.verify((error, success) => {
   if (error) {
     console.error('Error con nodemailer:', error);
@@ -54,6 +55,7 @@ function esHorarioValido(dia, hora) {
 }
 
 // Crear una cita
+// Crear una cita
 router.post('/reservar', async (req, res) => {
   const { nombre, correo, fecha_hora, tratamiento } = req.body;
 
@@ -62,8 +64,7 @@ router.post('/reservar', async (req, res) => {
   }
 
   const precio = tratamientos[tratamiento];
-  
-  // Aquí convertimos la fecha_hora al formato adecuado
+
   const fecha = moment.tz(fecha_hora, zonaHoraria).toDate();
 
   if (isNaN(fecha.getTime())) {
@@ -73,7 +74,7 @@ router.post('/reservar', async (req, res) => {
   const diaSemana = fecha.getDay();
   const dias = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
   const dia = dias[diaSemana];
-  const horaSeleccionada = `${fecha.getHours()}:${fecha.getMinutes() < 10 ? '0' : ''}${fecha.getMinutes()}`;
+  const horaSeleccionada = `${fecha.getHours()}:${fecha.getMinutes().toString().padStart(2, '0')}`;
 
   if (dia === 'domingo') {
     return res.status(400).json({ error: 'No se trabaja los domingos' });
@@ -84,6 +85,16 @@ router.post('/reservar', async (req, res) => {
   }
 
   try {
+    // 🔍 VERIFICAR HORA OCUPADA
+    const snapshot = await db.collection('citas')
+      .where('fecha_hora', '==', fecha_hora)
+      .get();
+
+    if (!snapshot.empty) {
+      return res.status(400).json({ error: 'Ya hay una cita agendada en esa fecha y hora.' });
+    }
+
+    // 🆗 GUARDAR NUEVA CITA
     const nuevaCita = await db.collection('citas').add({
       nombre,
       correo,
@@ -93,11 +104,12 @@ router.post('/reservar', async (req, res) => {
       estado: 'pendiente',
     });
 
+
     console.log('Cita guardada con ID:', nuevaCita.id);
 
     // Enviar correo de confirmación al cliente
     const mailOptionsCliente = {
-      from: 'eduardo@emhpsicoterapia.cl',
+      from: 'pam.latasoft@gmail.com',
       to: correo,
       subject: '🌿 Confirmación de tu cita con la Psicólogo Eduardo',
       html: `
@@ -127,8 +139,8 @@ router.post('/reservar', async (req, res) => {
     });
 
     const mailOptionsPsicologo = {
-      from: 'eduardo@emhpsicoterapia.cl',
-      to: 'eduardo@emhpsicoterapia.cl',  // Tu correo real
+      from: 'pam.latasoft@gmail.com',
+      to: 'pam.latasoft@gmail.com',  // Tu correo real
       subject: '📥 Nueva cita reservada',
       html: `
         <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #eef6f9; border-radius: 10px; color: #333;">
@@ -221,7 +233,7 @@ router.put('/reagendar/:id', async (req, res) => {
 
     // Enviar correo al cliente
     const mailOptionsCliente = {
-      from: 'eduardo@emhpsicoterapia.cl',
+      from: 'pam.latasoft@gmail.com',
       to: cita.correo,
       subject: '🌿 Reprogramación de tu cita con el Psicólogo Eduardo',
       html: `
@@ -250,8 +262,8 @@ router.put('/reagendar/:id', async (req, res) => {
 
     // Enviar correo al psicólogo
     const mailOptionsPsicologo = {
-      from: 'eduardo@emhpsicoterapia.cl',
-      to: 'eduardo@emhpsicoterapia.cl',  // Tu correo real
+      from: 'pam.latasoft@gmail.com',
+      to: 'pam.latasoft@gmail.com',  // Tu correo real
       subject: '📥 Cita reprogramada',
       html: `
         <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #eef6f9; border-radius: 10px; color: #333;">
@@ -294,7 +306,7 @@ router.delete('/cancelar/:id', async (req, res) => {
 
     // Enviar correo al cliente
     const mailOptionsCliente = {
-      from: 'eduardo@emhpsicoterapia.cl',
+      from: 'pam.latasoft@gmail.com',
       to: cita.correo,
       subject: '🌿 Cancelación de tu cita con el Psicólogo Eduardo',
       html: `
@@ -322,8 +334,8 @@ router.delete('/cancelar/:id', async (req, res) => {
 
     // Enviar correo al psicólogo
     const mailOptionsPsicologo = {
-      from: 'eduardo@emhpsicoterapia.cl',
-      to: 'eduardo@emhpsicoterapia.cl',  // Tu correo real
+      from: 'pam.latasoft@gmail.com',
+      to: 'pam.latasoft@gmail.com',  // Tu correo real
       subject: '📥 Cita cancelada',
       html: `
         <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #eef6f9; border-radius: 10px; color: #333;">
