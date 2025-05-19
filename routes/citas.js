@@ -55,7 +55,6 @@ function esHorarioValido(dia, hora) {
 }
 
 // Crear una cita
-// Crear una cita
 router.post('/reservar', async (req, res) => {
   const { nombre, correo, fecha_hora, tratamiento } = req.body;
 
@@ -107,62 +106,6 @@ router.post('/reservar', async (req, res) => {
 
     console.log('Cita guardada con ID:', nuevaCita.id);
 
-    // Enviar correo de confirmación al cliente
-    const mailOptionsCliente = {
-      from: 'pam.latasoft@gmail.com',
-      to: correo,
-      subject: '🌿 Confirmación de tu cita con la Psicólogo Eduardo',
-      html: `
-        <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #f9f9f9; border-radius: 10px; color: #333;">
-          <h2 style="color: #6a1b9a;">Hola ${nombre},</h2>
-          <p>¡Gracias por reservar tu espacio con la Psicólogo Eduardo!</p>
-          <p><strong>🗓️ Tratamiento:</strong> ${tratamiento}</p>
-          <p><strong>📅 Fecha:</strong> ${fecha.toLocaleDateString()}</p>
-          <p><strong>🕒 Hora:</strong> ${horaSeleccionada} hrs</p>
-          <p>Tu cita ha sido agendada con éxito. Recibirás un recordatorio el día anterior.</p>
-          <br />
-          <p style="font-style: italic;">Si tienes cualquier duda o necesitas reprogramar, no dudes en responder a este correo.</p>
-          <br />
-          <p>Con cariño,</p>
-          <p><strong>Psicólogo Eduardo</strong></p>
-        </div>
-      `
-    };
-    
-
-    transporter.sendMail(mailOptionsCliente, (error, info) => {
-      if (error) {
-        console.error('Error al enviar correo al cliente:', error);
-      } else {
-        console.log('Correo al cliente enviado:', info.response);
-      }
-    });
-
-    const mailOptionsPsicologo = {
-      from: 'pam.latasoft@gmail.com',
-      to: 'pam.latasoft@gmail.com',  // Tu correo real
-      subject: '📥 Nueva cita reservada',
-      html: `
-        <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #eef6f9; border-radius: 10px; color: #333;">
-          <h2 style="color: #00796b;">Nueva reserva de cita</h2>
-          <p><strong>👤 Nombre del paciente:</strong> ${nombre}</p>
-          <p><strong>✉️ Correo:</strong> ${correo}</p>
-          <p><strong>💆‍♀️ Tratamiento:</strong> ${tratamiento}</p>
-          <p><strong>🗓️ Fecha:</strong> ${fecha.toLocaleDateString()}</p>
-          <p><strong>🕒 Hora:</strong> ${horaSeleccionada} hrs</p>
-          <br />
-          <p style="font-size: 14px; color: #666;">Por favor, revisa la plataforma si deseas ver más detalles o confirmar la disponibilidad.</p>
-        </div>
-      `
-    };
-    
-    transporter.sendMail(mailOptionsPsicologo, (error, info) => {
-      if (error) {
-        console.error('Error al enviar correo al psicólogo:', error);
-      } else {
-        console.log('Correo al psicólogo enviado:', info.response);
-      }
-    });
 
     return res.status(201).json({
       id: nuevaCita.id,
