@@ -1,17 +1,18 @@
 const express = require('express');
-const router = express.Router();
-const db = require('../firebase/config');
+const router  = express.Router();
+const db      = require('../firebase/config');
 
-// Ruta para crear un nuevo blog
+// ----------- CREAR -------------
 router.post('/crear', async (req, res) => {
   try {
-    const { titulo, texto, imagen } = req.body;
-    const blogRef = db.collection('blogs').doc(); // Crear un nuevo documento en la colección 'blogs'
-    
+    const { titulo, texto, imagen, videoUrl = '' } = req.body;     // ← nuevo campo
+    const blogRef = db.collection('blogs').doc();
+
     await blogRef.set({
       titulo,
       texto,
-      imagen,
+      imagen: imagen || '',        // vacíos si no llegan
+      videoUrl,                    // idem
       fecha: new Date(),
     });
 
@@ -21,44 +22,40 @@ router.post('/crear', async (req, res) => {
   }
 });
 
-// Ruta para obtener todos los blogs
-router.get('/obtener', async (req, res) => {
+// ----------- OBTENER -----------
+router.get('/obtener', async (_req, res) => {
   try {
-    const snapshot = await db.collection('blogs').get(); // Obtener todos los blogs de Firestore
+    const snapshot = await db.collection('blogs').get();
     const blogs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
     res.status(200).json(blogs);
   } catch (error) {
     res.status(500).json({ message: 'Error al obtener los blogs', error });
   }
 });
-// Ruta para editar un blog existente
+
+// ----------- EDITAR ------------
 router.put('/editar/:id', async (req, res) => {
   try {
     const blogId = req.params.id;
-    const { titulo, texto, imagen } = req.body;
+    const { titulo, texto, imagen, videoUrl } = req.body; // incluye videoUrl
 
     const blogRef = db.collection('blogs').doc(blogId);
-    await blogRef.update({ titulo, texto, imagen });
+    await blogRef.update({ titulo, texto, imagen, videoUrl });
 
     res.status(200).json({ message: 'Blog actualizado exitosamente' });
   } catch (error) {
     res.status(500).json({ message: 'Error al actualizar el blog', error });
   }
 });
-// Ruta para eliminar un blog
+
+// ----------- ELIMINAR ----------
 router.delete('/eliminar/:id', async (req, res) => {
   try {
-    const blogId = req.params.id;
-
-    const blogRef = db.collection('blogs').doc(blogId);
-    await blogRef.delete();
-
+    await db.collection('blogs').doc(req.params.id).delete();
     res.status(200).json({ message: 'Blog eliminado exitosamente' });
   } catch (error) {
     res.status(500).json({ message: 'Error al eliminar el blog', error });
   }
 });
-
 
 module.exports = router;
