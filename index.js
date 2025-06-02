@@ -9,6 +9,7 @@ const citasRoutes = require('./routes/citas');
 const comentariosRoutes = require('./routes/comentarios');
 const blogsRoutes = require('./routes/blog');
 const tallerRoutes = require('./routes/taller');
+const horarioRoutes = require('./routes/horario');
 
 const app = express(); // 👈 Esto debe ir antes de usar `app.use`
 const port = 3000;
@@ -33,12 +34,16 @@ app.use(cors({
   origin: '*'
 }));
 
+
+
+
 // Rutas
 app.use('/api/citas', citasRoutes);
 app.use('/api/comentarios', comentariosRoutes);
 app.use('/api/blog', blogsRoutes);
 app.use('/api/login', loginRoutes);
 app.use('/api/taller', tallerRoutes); 
+app.use('/api/horario', horarioRoutes);
 
 app.get('/api/admin', verifyToken, (req, res) => {
   // Si el token es válido, el usuario podrá acceder
