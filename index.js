@@ -14,11 +14,13 @@ const horarioRoutes = require('./routes/horario');
 const app = express(); // 👈 Esto debe ir antes de usar `app.use`
 const port = 3000;
 
-// Inicializar Firebase
+
+// Inicializar Firebase con clave de servicio
+const serviceAccount = require('./firebase/key.json.json');
 if (!admin.apps.length) {
   admin.initializeApp({
-    credential: admin.credential.applicationDefault(),
-    databaseURL: 'https://tu-proyecto-id.firebaseio.com' // 👈 Cambia esto por el real de tu proyecto
+    credential: admin.credential.cert(serviceAccount),
+    databaseURL: 'https://psicoterapia-7fb0d.firebaseio.com' // 👈 Cambia esto por el real de tu proyecto si es diferente
   });
 } else {
   admin.app();
@@ -31,7 +33,8 @@ module.exports = db; // 👈 Esto permite usar `db` en otros archivos (como ruta
 // Middleware
 app.use(bodyParser.json());
 app.use(cors({
-  origin: '*'
+  origin: 'http://localhost:4200', // URL de tu frontend React en desarrollo
+  credentials: true // Si necesitas enviar cookies o autenticación
 }));
 
 
