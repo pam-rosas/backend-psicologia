@@ -16,20 +16,35 @@ const port = 3000;
 
 // Inicializar Firebase con clave de servicio
 let serviceAccount;
+
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('Firebase env vars check:');
+console.log('FIREBASE_CLIENT_EMAIL:', process.env.FIREBASE_CLIENT_EMAIL ? 'SET' : 'NOT SET');
+console.log('FIREBASE_PRIVATE_KEY:', process.env.FIREBASE_PRIVATE_KEY ? 'SET' : 'NOT SET');
+
 if (process.env.NODE_ENV === 'production') {
   // En producción, usar variables de entorno
+  console.log('Using production Firebase config from environment variables');
+  
+  if (!process.env.FIREBASE_CLIENT_EMAIL || !process.env.FIREBASE_PRIVATE_KEY) {
+    console.error('ERROR: Firebase environment variables are missing!');
+    console.error('Required: FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY');
+    process.exit(1);
+  }
+  
   serviceAccount = {
-    type: process.env.FIREBASE_TYPE,
-    project_id: process.env.FIREBASE_PROJECT_ID,
+    type: process.env.FIREBASE_TYPE || "service_account",
+    project_id: process.env.FIREBASE_PROJECT_ID || "psicoterapia-7fb0d",
     private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
-    private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+    private_key: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
     client_email: process.env.FIREBASE_CLIENT_EMAIL,
     client_id: process.env.FIREBASE_CLIENT_ID,
-    auth_uri: process.env.FIREBASE_AUTH_URI,
-    token_uri: process.env.FIREBASE_TOKEN_URI
+    auth_uri: process.env.FIREBASE_AUTH_URI || "https://accounts.google.com/o/oauth2/auth",
+    token_uri: process.env.FIREBASE_TOKEN_URI || "https://oauth2.googleapis.com/token"
   };
 } else {
-  // En desarrollo, usar variables de entorno también
+  // En desarrollo, usar credenciales hardcodeadas
+  console.log('Using development Firebase config');
   serviceAccount = {
     type: "service_account",
     project_id: "psicoterapia-7fb0d",
