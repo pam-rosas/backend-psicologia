@@ -46,11 +46,16 @@ if (process.env.NODE_ENV === 'production') {
 
 // Inicializar Firebase solo si no está ya inicializado
 if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-    databaseURL: 'https://psicoterapia-7fb0d.firebaseio.com'
-  });
-  console.log('Firebase inicializado correctamente');
+  try {
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+      databaseURL: 'https://psicoterapia-7fb0d.firebaseio.com'
+    });
+    console.log('Firebase inicializado correctamente');
+  } catch (error) {
+    console.error('Error al inicializar Firebase:', error);
+    throw error;
+  }
 } else {
   admin.app();
   console.log('Firebase ya estaba inicializado');
@@ -58,4 +63,14 @@ if (!admin.apps.length) {
 
 // Exportar la instancia de Firestore
 const db = admin.firestore();
+
+// Test de conexión
+db.collection('test').limit(1).get()
+  .then(() => {
+    console.log('✅ Conexión a Firestore exitosa');
+  })
+  .catch(error => {
+    console.error('❌ Error de conexión a Firestore:', error.message);
+  });
+
 module.exports = db;

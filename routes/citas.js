@@ -169,6 +169,34 @@ router.get('/tratamientos', async (req, res) => {
   try {
     console.log('Obteniendo tratamientos...');
     const snapshot = await db.collection('tratamientos').get();
+    
+    if (snapshot.empty) {
+      console.log('No hay tratamientos, creando tratamientos por defecto...');
+      
+      // Crear tratamientos por defecto
+      const tratamientosDefault = [
+        {
+          nombre: 'Psicoterapia e hipnoterapia',
+          precioNacional: 40000,
+          precioInternacional: 50,
+          sesiones: 1
+        },
+        {
+          nombre: 'Taller de duelo',
+          precioNacional: 70000,
+          precioInternacional: 85,
+          sesiones: 4
+        }
+      ];
+      
+      for (const tratamiento of tratamientosDefault) {
+        await db.collection('tratamientos').add(tratamiento);
+      }
+      
+      console.log('Tratamientos por defecto creados');
+      return res.json(tratamientosDefault.map((t, index) => ({ id: `default_${index}`, ...t })));
+    }
+    
     const tratamientos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     console.log('Tratamientos encontrados:', tratamientos.length);
     res.json(tratamientos);
