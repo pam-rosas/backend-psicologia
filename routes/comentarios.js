@@ -1,9 +1,7 @@
 // en routes/comentarios.js
 const express = require('express');
 const router = express.Router();
-const admin = require('firebase-admin');
-
-const db = admin.firestore();
+const db = require('../index'); // Usar db del index.js
 
 // Obtener comentarios
 router.get('/', async (req, res) => {
