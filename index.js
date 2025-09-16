@@ -81,5 +81,5 @@ app.get('/api/admin', verifyToken, (req, res) => {
 
 // Iniciar servidor
 app.listen(port, '0.0.0.0', () => {
-  console.log(`Servidor corriendo en http://localhost:${port}`);
+  console.log(`Servidor corriendo en http://localhost:${port} - Deploy v2`);
 });
