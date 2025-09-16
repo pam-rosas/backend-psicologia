@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../firebase/config');
+const db = require('../index'); // Usar db del index.js
 const nodemailer = require('nodemailer');
 const moment = require('moment-timezone');
 const zonaHoraria = 'America/Santiago';  // O la zona horaria que necesitas

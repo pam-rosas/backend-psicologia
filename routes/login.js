@@ -1,7 +1,7 @@
 // routes/login.js
 const express = require('express');
 const router = express.Router();
-const db = require('../firebase/config');
+const db = require('../index'); // Usar db del index.js
 const bcrypt = require('bcryptjs'); // ✅ Usa bcryptjs para evitar errores de compilación
 const jwt = require('jsonwebtoken');
 
