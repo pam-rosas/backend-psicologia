@@ -1,12 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const admin = require('firebase-admin');
+const db = require('../firebase/config'); // Usar Firebase config
 const nodemailer = require('nodemailer');
 const moment = require('moment-timezone');
 const zonaHoraria = 'America/Santiago';  // O la zona horaria que necesitas
-
-// Obtener la instancia de Firestore
-const db = admin.firestore();
 
 // Configura el transporte SMTP para Gmail
 const transporter = nodemailer.createTransport({

@@ -1,12 +1,9 @@
 // routes/login.js
 const express = require('express');
 const router = express.Router();
-const admin = require('firebase-admin');
+const db = require('../firebase/config'); // Usar Firebase config
 const bcrypt = require('bcryptjs'); // ✅ Usa bcryptjs para evitar errores de compilación
 const jwt = require('jsonwebtoken');
-
-// Obtener la instancia de Firestore
-const db = admin.firestore();
 
 // 🔐 Ruta de login de administrador
 router.post('/', async (req, res) => {
