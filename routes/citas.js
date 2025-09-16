@@ -166,9 +166,16 @@ const horasOcupadas = snapshot.docs.map(doc => {
 
 // GET todos los tratamientos
 router.get('/tratamientos', async (req, res) => {
-  const snapshot = await db.collection('tratamientos').get();
-  const tratamientos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-  res.json(tratamientos);
+  try {
+    console.log('Obteniendo tratamientos...');
+    const snapshot = await db.collection('tratamientos').get();
+    const tratamientos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    console.log('Tratamientos encontrados:', tratamientos.length);
+    res.json(tratamientos);
+  } catch (error) {
+    console.error('Error al obtener tratamientos:', error);
+    res.status(500).json({ error: 'Error al obtener tratamientos', details: error.message });
+  }
 });
 
 // POST crear tratamiento
