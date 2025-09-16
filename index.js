@@ -31,7 +31,7 @@ module.exports = db;
 // Middleware
 app.use(bodyParser.json());
 app.use(cors({
-  origin: ['http://localhost:4200', 'http://localhost:3000'],
+  origin: ['https://emhpsicoterapia.cl', 'http://localhost:4200'],
   credentials: true
 }));
 
