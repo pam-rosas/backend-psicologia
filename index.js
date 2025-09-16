@@ -11,34 +11,35 @@ const blogsRoutes = require('./routes/blog');
 const tallerRoutes = require('./routes/taller');
 const horarioRoutes = require('./routes/horario');
 
-const app = express(); // 👈 Esto debe ir antes de usar `app.use`
+const app = express();
 const port = 3000;
-
 
 // Inicializar Firebase con clave de servicio
 const serviceAccount = require('./firebase/key.json.json');
 if (!admin.apps.length) {
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
-    databaseURL: 'https://psicoterapia-7fb0d.firebaseio.com' // 👈 Cambia esto por el real de tu proyecto si es diferente
+    databaseURL: 'https://psicoterapia-7fb0d.firebaseio.com'
   });
 } else {
   admin.app();
 }
 
 const db = admin.firestore();
-module.exports = db; // 👈 Esto permite usar `db` en otros archivos (como rutas)
+module.exports = db;
 
-// Middleware
 // Middleware
 app.use(bodyParser.json());
 app.use(cors({
-  origin: 'http://localhost:4200', // URL de tu frontend React en desarrollo
-  credentials: true // Si necesitas enviar cookies o autenticación
+  origin: ['http://localhost:4200', 'http://localhost:3000'],
+  credentials: true
 }));
 
-
-
+// Middleware para capturar todas las peticiones
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.url} - Body:`, req.body);
+  next();
+});
 
 // Rutas
 app.use('/api/citas', citasRoutes);
@@ -49,9 +50,9 @@ app.use('/api/taller', tallerRoutes);
 app.use('/api/horario', horarioRoutes);
 
 app.get('/api/admin', verifyToken, (req, res) => {
-  // Si el token es válido, el usuario podrá acceder
   res.status(200).json({ message: 'Bienvenido a la sección de administrador', user: req.user });
 });
+
 // Iniciar servidor
 app.listen(port, '0.0.0.0', () => {
   console.log(`Servidor corriendo en http://localhost:${port}`);
