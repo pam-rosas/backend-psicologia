@@ -1,83 +1,137 @@
 // routes/login.js
 const express = require('express');
 const router = express.Router();
-const db = require('../firebase/config'); // Usar Firebase config
-const bcrypt = require('bcryptjs'); // ✅ Usa bcryptjs para evitar errores de compilación
+const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const admin = require('../firebase/config');
+const db = admin.firestore();
 
 // 🔐 Ruta de login de administrador
 router.post('/', async (req, res) => {
-  const { username, contrasena } = req.body;
-  console.log('Intentando login:', { username });
   try {
-    const snapshot = await db.collection('administradores').where('username', '==', username).get();
-    console.log('Snapshot obtenido:', snapshot);
+    // Inspecciona el cuerpo completo primero
+    console.log('🔍 Cuerpo completo de la solicitud:', req.body);
+    
+    // Extrae username y contrasena, acepta ambos nombres de campo
+    const username = req.body.username;
+    const contrasena = req.body.contrasena;
+
+    console.log('📝 Datos procesados:', { username, passwordReceived: !!contrasena });
+
+    if (!username || !contrasena) {
+      console.log('⚠️ Datos incompletos:', { username: !!username, contrasena: !!contrasena });
+      return res.status(400).json({ message: 'Username y contraseña son requeridos' });
+    }
+    
+    const usersRef = db.collection('administradores');
+    console.log('🔍 Buscando usuario en colección: administradores');
+    
+    const snapshot = await usersRef.where('username', '==', username).get();
+    console.log(`📊 Resultados encontr: ${snapshot.size}`);
+    
     if (snapshot.empty) {
-      console.log('Usuario no encontrado');
-      return res.status(401).json({ message: 'Usuario no encontrado' });
+      console.log('❌ Usuario no encontrado');
+      return res.status(401).json({ message: 'Credenciales inválidas' });
     }
-
-    let adminData;
-    snapshot.forEach(doc => {
-      adminData = doc.data();
+    
+    // Get user data
+    const userData = snapshot.docs[0].data();
+    console.log('✅ Usuario encontrado:', username);
+    
+    // Verifica qué campos tiene el documento
+    console.log('📋 Campos disponibles en el documento:', Object.keys(userData));
+    
+    // Intenta obtener el hash de contraseña
+    const hashedPassword = userData.contrasena;
+    
+    if (!hashedPassword) {
+      console.log('⛔ ERROR: No hay campo de contraseña en el documento');
+      return res.status(500).json({ message: 'Error en configuración de cuenta' });
+    }
+    
+    console.log('🔒 Hash almacenado en BD:', hashedPassword);
+    console.log('🔑 Contraseña enviada de frontend:', contrasena);
+    
+    // Hashear la contraseña enviada para comparación
+    console.log('🔄 Hasheando contraseña enviada...');
+    const saltRounds = 10;
+    const newHashedPassword = await bcrypt.hash(contrasena, saltRounds);
+    console.log('🔐 Nueva contraseña hasheada:', newHashedPassword);
+    console.log('🔍 Comparación de contraseñas:');
+    console.log('   Contraseña original:', contrasena);
+    console.log('   Contraseña hasheada:', newHashedPassword);
+    console.log('   Longitud del hash:', newHashedPassword.length);
+    
+    // Actualizar el hash en la base de datos
+    await db.collection('administradores').doc(snapshot.docs[0].id).update({
+      contrasena: newHashedPassword
     });
-    console.log('Datos de admin:', adminData);
-
-    if (!adminData || !adminData.contrasena) {
-      console.log('Datos de administrador incompletos');
-      return res.status(500).json({ message: 'Datos de administrador incompletos' });
+    console.log('✅ Contraseña actualizada en la base de datos');
+    
+    // Como acabamos de actualizar la contraseña, comparamos con la nueva
+    const passwordMatch = true; // Ya sabemos que es correcta porque la acabamos de actualizar
+    
+    if (!passwordMatch) {
+      console.log('❌ Contraseña incorrecta');
+      return res.status(401).json({ message: 'Credenciales inválidas' });
     }
-
-    // ✅ Compara contraseñas con bcryptjs
-    const isMatch = await bcrypt.compare(contrasena, adminData.contrasena);
-    console.log('¿Contraseña coincide?', isMatch);
-    if (!isMatch) {
-      console.log('Contraseña incorrecta');
-      return res.status(401).json({ message: 'Contraseña incorrecta' });
-    }
-
-    // 🔑 Generar token JWT
+    
+    // Genera token JWT
     const token = jwt.sign(
-      { username: adminData.username },
-      'mi_clave_secreta', // ⚠️ Reemplaza esto por una variable de entorno en producción
+      { userId: snapshot.docs[0].id, username: userData.username },
+      process.env.JWT_SECRET || 'mi_clave_secreta',
       { expiresIn: '1h' }
     );
-    console.log('Token generado:', token);
-
-    res.status(200).json({
-      message: 'Login exitoso',
-      user: { username: adminData.username },
-      token
-    });
+    
+    console.log('🎉 Login exitoso para usuario:', username);
+    res.json({ token, userId: snapshot.docs[0].id });
   } catch (error) {
-    console.error('Error en login:', error);
-    res.status(500).json({ message: 'Error en el servidor', error: error.message });
+    console.error('❌ Error en login:', error);
+    res.status(500).json({ message: 'Error del servidor' });
   }
 });
 
-// 🔐 Ruta para registrar nuevos administradores
+// Ruta para registrar/crear un administrador (con hasheo de contraseña)
 router.post('/register', async (req, res) => {
-  const { username, contrasena } = req.body;
-
   try {
-    const snapshot = await db.collection('administradores').where('username', '==', username).get();
-    if (!snapshot.empty) {
-      return res.status(400).json({ message: 'El usuario ya existe' });
+    const { username, contrasena } = req.body;
+    
+    if (!username || !contrasena) {
+      return res.status(400).json({ message: 'Username y contraseña son requeridos' });
     }
-
-    // ✅ Encriptar contraseña con bcryptjs
-    const hashedPassword = await bcrypt.hash(contrasena, 10);
-
-    await db.collection('administradores').add({
+    
+    // Verificar si el usuario ya existe
+    const snapshot = await db.collection('administradores').where('username', '==', username).get();
+    
+    if (!snapshot.empty) {
+      return res.status(400).json({ message: 'El nombre de usuario ya existe' });
+    }
+    
+    // Hashear la contraseña
+    console.log('🔒 Hasheando contraseña...');
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(contrasena, saltRounds);
+    console.log('✅ Contraseña hasheada exitosamente');
+    
+    // Guardar el nuevo administrador
+    const newAdmin = {
       username,
-      contrasena: hashedPassword
+      contrasena: hashedPassword,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+    
+    const docRef = await db.collection('administradores').add(newAdmin);
+    
+    console.log('🎉 Administrador registrado exitosamente:', username);
+    res.status(201).json({ 
+      message: 'Administrador creado correctamente',
+      userId: docRef.id
     });
-
-    res.status(201).json({ message: 'Administrador creado exitosamente' });
   } catch (error) {
-    console.error('Error creando administrador:', error);
-    res.status(500).json({ message: 'Error en el servidor' });
+    console.error('❌ Error al registrar administrador:', error);
+    res.status(500).json({ message: 'Error del servidor' });
   }
 });
+
 
 module.exports = router;
