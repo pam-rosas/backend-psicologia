@@ -6,9 +6,9 @@ try {
   // Intentar cargar desde /etc/secrets en producción
   let serviceAccount;
   
-  if (fs.existsSync('/etc/secrets/firebase-key.json')) {
+  if (fs.existsSync('/etc/secrets/key.json')) {
     // Estamos en Render, usar archivo secreto
-    serviceAccount = require('/etc/secrets/firebase-key.json');
+    serviceAccount = require('/etc/secrets/key.json');
     console.log('✅ Credenciales cargadas desde /etc/secrets/firebase-key.json');
   } else {
     // Estamos en desarrollo, usar archivo local
