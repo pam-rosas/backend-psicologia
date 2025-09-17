@@ -1,37 +1,14 @@
 // firebase/config.js
 const admin = require('firebase-admin');
 
-// Inicializar Firebase con clave de servicio
+// Usar las credenciales directamente desde el archivo key.json.json
 let serviceAccount;
 
-console.log('NODE_ENV:', process.env.NODE_ENV);
-console.log('Firebase env vars check:');
-console.log('client_email:', process.env.client_email ? 'SET' : 'NOT SET');
-console.log('FIREBASE_PRIVATE_KEY:', process.env.FIREBASE_PRIVATE_KEY ? 'SET' : 'NOT SET');
-
-if (process.env.NODE_ENV === 'production') {
-  // En producción, usar variables de entorno
-  console.log('Using production Firebase config from environment variables');
-  
-  if (!process.env.client_email || !process.env.FIREBASE_PRIVATE_KEY) {
-    console.error('ERROR: Firebase environment variables are missing!');
-    console.error('Required: client_email, FIREBASE_PRIVATE_KEY');
-    process.exit(1);
-  }
-  
-  serviceAccount = {
-    type: process.env.FIREBASE_TYPE || "service_account",
-    project_id: process.env.FIREBASE_PROJECT_ID || "psicoterapia-7fb0d",
-    private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
-    private_key: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-    client_email: process.env.client_email,
-    client_id: process.env.client_id,
-    auth_uri: process.env.auth_uri || "https://accounts.google.com/o/oauth2/auth",
-    token_uri: process.env.token_uri || "https://oauth2.googleapis.com/token"
-  };
-} else {
-  // En desarrollo, usar credenciales hardcodeadas
-  console.log('Using development Firebase config');
+try {
+  serviceAccount = require('./key.json.json');
+  console.log('✅ Credenciales cargadas desde key.json.json');
+} catch (error) {
+  console.log('⚠️ No se pudo cargar key.json.json, usando credenciales hardcodeadas');
   serviceAccount = {
     type: "service_account",
     project_id: "psicoterapia-7fb0d",
