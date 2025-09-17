@@ -1,9 +1,20 @@
-// firebase/config.js
 const admin = require('firebase-admin');
+const fs = require('fs');
+const path = require('path');
 
 try {
-  // Asegúrate que la ruta sea correcta
-  const serviceAccount = require('etc/secrets/key.json');
+  // Intentar cargar desde /etc/secrets en producción
+  let serviceAccount;
+  
+  if (fs.existsSync('/etc/secrets/firebase-key.json')) {
+    // Estamos en Render, usar archivo secreto
+    serviceAccount = require('/etc/secrets/firebase-key.json');
+    console.log('✅ Credenciales cargadas desde /etc/secrets/firebase-key.json');
+  } else {
+    // Estamos en desarrollo, usar archivo local
+    serviceAccount = require('./key.json');
+    console.log('✅ Credenciales cargadas desde ./key.json');
+  }
   
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount)
@@ -15,19 +26,4 @@ try {
   throw error;
 }
 
-// Test de conexión
-const db = admin.firestore();
-db.collection('administradores').limit(1).get()
-  .then(() => {
-    console.log('✅ Conexión a Firestore exitosa');
-  })
-  .catch(error => {
-    console.error('❌ Error de conexión a Firestore:', error);
-  });
-
-// IMPORTANTE: Exporta el objeto admin, NO db
-module.exports = admin;  // Exporta admin en lugar de db
-
-// Test simple que puedes añadir al final de config.js para probar
-const adminObj = require('./config'); // Auto-importa este mismo archivo
-console.log('¿El objeto admin tiene firestore?', typeof adminObj.firestore === 'function');
+module.exports = admin;
