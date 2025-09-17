@@ -3,7 +3,7 @@ const admin = require('firebase-admin');
 
 try {
   // Asegúrate que la ruta sea correcta
-  const serviceAccount = require('./key.json');
+  const serviceAccount = require('etc/secrets/key.json');
   
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount)
