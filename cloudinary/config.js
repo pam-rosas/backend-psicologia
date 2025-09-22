@@ -26,7 +26,6 @@ const uploadImage = async (file, options = {}) => {
     const defaultOptions = {
       folder: 'psicologia/general',
       quality: 'auto:good',
-      format: 'auto',
       transformation: [
         { width: 1200, height: 800, crop: 'limit' },
         { quality: 'auto:good' }
@@ -43,7 +42,6 @@ const uploadImage = async (file, options = {}) => {
       width: result.width,
       height: result.height,
       bytes: result.bytes,
-      format: result.format,
       created_at: result.created_at
     };
   } catch (error) {

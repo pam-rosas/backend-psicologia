@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const upload = require('../middlewares/upload');
-const verifyToken = require('../middlewares/verifyToken');
+// const verifyToken = require('../middlewares/verifyToken'); // Comentado
 const { 
   uploadImage, 
   deleteImage, 
@@ -28,8 +28,8 @@ router.get('/test', async (req, res) => {
   }
 });
 
-// Subir imagen para blog (CON autenticación)
-router.post('/blog', verifyToken, upload.single('imagen'), async (req, res) => {
+// Subir imagen para blog (SIN autenticación)
+router.post('/blog', upload.single('imagen'), async (req, res) => {
   try {
     console.log('📸 Upload blog image request received');
     console.log('📁 File:', req.file ? 'Present' : 'Missing');
@@ -44,9 +44,7 @@ router.post('/blog', verifyToken, upload.single('imagen'), async (req, res) => {
       folder: 'psicologia/blog',
       public_id: `blog_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       transformation: [
-        { width: 1200, height: 800, crop: 'limit' },
-        { quality: 'auto:good' },
-        { format: 'auto' }
+        { width: 1200, height: 800, crop: 'limit' }
       ]
     };
 
@@ -68,8 +66,8 @@ router.post('/blog', verifyToken, upload.single('imagen'), async (req, res) => {
   }
 });
 
-// Subir imagen general (CON autenticación)
-router.post('/upload/:folder', verifyToken, upload.single('imagen'), async (req, res) => {
+// Subir imagen general (SIN autenticación)
+router.post('/upload/:folder', upload.single('imagen'), async (req, res) => {
   try {
     console.log(`📸 Upload image to folder: ${req.params.folder}`);
     console.log('📁 File:', req.file ? 'Present' : 'Missing');
@@ -91,9 +89,7 @@ router.post('/upload/:folder', verifyToken, upload.single('imagen'), async (req,
       folder: `psicologia/${folder}`,
       public_id: `${folder}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       transformation: [
-        { width: 1200, height: 800, crop: 'limit' },
-        { quality: 'auto:good' },
-        { format: 'auto' }
+        { width: 1200, height: 800, crop: 'limit' }
       ]
     };
 
@@ -115,12 +111,11 @@ router.post('/upload/:folder', verifyToken, upload.single('imagen'), async (req,
   }
 });
 
-// Subir video (CON autenticación)
-router.post('/upload-video/:folder', verifyToken, upload.single('video'), async (req, res) => {
+// Subir video (SIN autenticación)
+router.post('/upload-video/:folder', upload.single('video'), async (req, res) => {
   try {
     console.log(`🎥 Upload video to folder: ${req.params.folder}`);
     console.log('📁 File:', req.file ? 'Present' : 'Missing');
-    console.log('🔐 User:', req.user ? 'Authenticated' : 'Not authenticated');
     
     if (!req.file) {
       return res.status(400).json({ error: 'No se proporcionó archivo de video' });
@@ -140,9 +135,7 @@ router.post('/upload-video/:folder', verifyToken, upload.single('video'), async 
       public_id: `video_${folder}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       resource_type: 'video',
       transformation: [
-        { width: 1280, height: 720, crop: 'limit' },
-        { quality: 'auto:good' },
-        { format: 'auto' }
+        { width: 1280, height: 720, crop: 'limit' }
       ]
     };
 
@@ -164,8 +157,8 @@ router.post('/upload-video/:folder', verifyToken, upload.single('video'), async 
   }
 });
 
-// Eliminar imagen (CON autenticación)
-router.delete('/:publicId', verifyToken, async (req, res) => {
+// Eliminar imagen (SIN autenticación)
+router.delete('/:publicId', async (req, res) => {
   try {
     const { publicId } = req.params;
     const decodedPublicId = decodeURIComponent(publicId);
@@ -194,8 +187,8 @@ router.delete('/:publicId', verifyToken, async (req, res) => {
   }
 });
 
-// Obtener imágenes de una carpeta (CON autenticación)
-router.get('/folder/:folder', verifyToken, async (req, res) => {
+// Obtener imágenes de una carpeta (SIN autenticación)
+router.get('/folder/:folder', async (req, res) => {
   try {
     const { folder } = req.params;
     const { limit = 50 } = req.query;
@@ -225,9 +218,7 @@ router.get('/optimized/:publicId', (req, res) => {
     const { 
       width = 300, 
       height = 200, 
-      quality = 'auto:good',
-      crop = 'fill',
-      format = 'auto'
+      crop = 'fill'
     } = req.query;
     
     const decodedPublicId = decodeURIComponent(publicId);
@@ -235,9 +226,7 @@ router.get('/optimized/:publicId', (req, res) => {
     const optimizedUrl = getOptimizedUrl(decodedPublicId, {
       width: parseInt(width),
       height: parseInt(height),
-      crop: crop,
-      quality: quality,
-      format: format
+      crop: crop
     });
     
     res.redirect(optimizedUrl);
