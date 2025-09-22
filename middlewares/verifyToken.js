@@ -1,23 +1,31 @@
 const jwt = require('jsonwebtoken');
 
 const verifyToken = (req, res, next) => {
-  const token = req.headers['authorization'];
-
+  console.log('[AUTH] Verifying token...');
+  
+  const authHeader = req.headers.authorization;
+  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+  
   if (!token) {
     console.log('[AUTH] No token provided');
-    return res.status(403).json({ message: 'No se proporcionó token' });
+    return res.status(401).json({ 
+      success: false, 
+      error: 'Token de acceso requerido' 
+    });
   }
 
-  jwt.verify(token, 'mi_clave_secreta', (err, decoded) => {
-    if (err) {
-      console.log('[AUTH] No token provided');
-      return res.status(403).json({ message: 'Token inválido' });
-    }
-
-    // Almacenamos la información decodificada en el request (si es necesario)
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'tu_jwt_secret');
     req.user = decoded;
+    console.log('[AUTH] Token valid for user:', decoded.email);
     next();
-  });
+  } catch (error) {
+    console.log('[AUTH] Invalid token:', error.message);
+    return res.status(403).json({ 
+      success: false, 
+      error: 'Token inválido' 
+    });
+  }
 };
 
 module.exports = verifyToken;

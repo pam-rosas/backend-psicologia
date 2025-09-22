@@ -9,16 +9,22 @@ const comentariosRoutes = require('./routes/comentarios');
 const blogsRoutes = require('./routes/blog');
 const tallerRoutes = require('./routes/taller');
 const horarioRoutes = require('./routes/horario');
+const imageRoutes = require('./routes/images');
 
 const app = express();
 const port = 3000;
 
+// Configuración de CORS más específica
+const corsOptions = {
+  origin: ['https://emhpsicoterapia.cl', 'http://localhost:4200'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
+
 // Middleware
 app.use(bodyParser.json());
-app.use(cors({
-  origin: ['https://emhpsicoterapia.cl', 'http://localhost:4200'],
-  credentials: true
-}));
+app.use(cors(corsOptions));
 
 // Middleware para capturar todas las peticiones
 app.use((req, res, next) => {
@@ -33,6 +39,8 @@ app.use('/api/blog', blogsRoutes);
 app.use('/api/login', loginRoutes);
 app.use('/api/taller', tallerRoutes); 
 app.use('/api/horario', horarioRoutes);
+app.use('/api/images', imageRoutes);
+
 
 app.get('/api/admin', verifyToken, (req, res) => {
   res.status(200).json({ message: 'Bienvenido a la sección de administrador', user: req.user });
@@ -42,3 +50,20 @@ app.get('/api/admin', verifyToken, (req, res) => {
 app.listen(port, '0.0.0.0', () => {
   console.log(`Servidor corriendo en http://localhost:${port} - Deploy v2`);
 });
+
+// Verificar que existe: c:\psicologia\backend-psicologia\routes\images.js
+// Y que está siendo importado en index.js
+
+// Si no existe, créalo con este contenido básico:
+const router = express.Router();
+
+// Ruta de prueba
+router.get('/test', (req, res) => {
+  res.json({ 
+    success: true, 
+    message: 'Ruta de imágenes funcionando',
+    timestamp: new Date().toISOString()
+  });
+});
+
+module.exports = router;
