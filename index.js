@@ -31,7 +31,7 @@ app.use(cors(corsOptions));
 
 // Middleware para capturar todas las peticiones
 app.use((req, res, next) => {
-  console.log(`${req.method} ${req.url} - Body:`, req.body);
+  console.log(`${req.method} ${req.url} - Body:`, req.body );
   next();
 });
 
