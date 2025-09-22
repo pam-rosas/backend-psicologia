@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../index'); // Usar db del index.js
+const db = require('../firebase/config');
 
 // Ruta para guardar un nuevo taller de duelo
 router.post('/crear', async (req, res) => {

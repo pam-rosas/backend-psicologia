@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const admin = require('firebase-admin');
-const db = require('../index'); // Usar db del index.js
+const db = require('../firebase/config');
 const FieldValue = admin.firestore.FieldValue;
 
 // Crear o actualizar el horario

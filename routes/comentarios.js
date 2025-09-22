@@ -1,7 +1,7 @@
 // en routes/comentarios.js
 const express = require('express');
 const router = express.Router();
-const db = require('../index'); // Usar db del index.js
+const db = require('../firebase/config');
 
 // Obtener comentarios
 router.get('/', async (req, res) => {
