@@ -10,6 +10,9 @@ const blogsRoutes = require('./routes/blog');
 const tallerRoutes = require('./routes/taller');
 const horarioRoutes = require('./routes/horario');
 const imageRoutes = require('./routes/images');
+// Importar nuevas rutas
+const pageContentRoutes = require('./routes/page-content');
+const mediaRoutes = require('./routes/media');
 
 const app = express();
 const port = 3000;
@@ -40,6 +43,9 @@ app.use('/api/login', loginRoutes);
 app.use('/api/taller', tallerRoutes); 
 app.use('/api/horario', horarioRoutes);
 app.use('/api/images', imageRoutes);
+// Usar las nuevas rutas
+app.use('/api/page-content', pageContentRoutes);
+app.use('/api/media', mediaRoutes);
 
 
 app.get('/api/admin', verifyToken, (req, res) => {
