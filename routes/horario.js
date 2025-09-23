@@ -26,6 +26,7 @@ router.post('/guardar', async (req, res) => {
     res.status(500).json({ message: 'Error interno del servidor', error });
   }
 });
+
 router.get('/obtener', async (req, res) => {
   try {
     const doc = await db.collection('horarios').doc('horario-general').get();
@@ -40,10 +41,11 @@ router.get('/obtener', async (req, res) => {
     res.status(500).json({ message: 'Error interno del servidor' });
   }
 });
+
 // PATCH /api/horario/editar-dia/:dia
 router.patch('/editar-dia/:dia', async (req, res) => {
   const dia = req.params.dia; // ej: lunes
-  const { horas } = req.body; // ej: ["15:00", "17:00"]
+  const { horas } = req.body; // ej: [{"inicio": "15:00", "fin": "16:00"}]
 
   if (!horas || !Array.isArray(horas)) {
     return res.status(400).json({ message: 'Debe enviar un array de horas.' });
@@ -51,19 +53,40 @@ router.patch('/editar-dia/:dia', async (req, res) => {
 
   try {
     const docRef = db.collection('horarios').doc('horario-general');
-    await docRef.update({
-      [`horarioSemanal.${dia}`]: horas
-    });
+    
+    // Si el array está vacío, eliminar la propiedad del día
+    if (horas.length === 0) {
+      await docRef.update({
+        [`horarioSemanal.${dia}`]: FieldValue.delete()
+      });
+    } else {
+      // Validar que cada hora tenga inicio y fin
+      const horasValidas = horas.every(hora => 
+        hora && typeof hora === 'object' && hora.inicio && hora.fin
+      );
+      
+      if (!horasValidas) {
+        return res.status(400).json({ 
+          message: 'Cada hora debe tener formato: {"inicio": "HH:MM", "fin": "HH:MM"}' 
+        });
+      }
+
+      await docRef.update({
+        [`horarioSemanal.${dia}`]: horas
+      });
+    }
+    
     res.status(200).json({ message: `Horario del ${dia} actualizado.` });
   } catch (error) {
     console.error('Error al actualizar el horario:', error);
     res.status(500).json({ message: 'Error al actualizar el horario.', error });
   }
 });
+
 // PATCH /api/horario/editar-excepcion/:fecha
 router.patch('/editar-excepcion/:fecha', async (req, res) => {
   const fecha = req.params.fecha; // ej: 2025-06-17
-  const { horas } = req.body;     // ej: ["10:00", "12:00"]
+  const { horas } = req.body;     // ej: [{"inicio": "10:00", "fin": "11:00"}]
 
   if (!horas || !Array.isArray(horas)) {
     return res.status(400).json({ message: 'Debe enviar un array de horas.' });
@@ -71,15 +94,36 @@ router.patch('/editar-excepcion/:fecha', async (req, res) => {
 
   try {
     const docRef = db.collection('horarios').doc('horario-general');
-    await docRef.update({
-      [`excepciones.${fecha}`]: horas
-    });
+    
+    // Si el array está vacío, mantener array vacío (no eliminar la excepción)
+    if (horas.length === 0) {
+      await docRef.update({
+        [`excepciones.${fecha}`]: []
+      });
+    } else {
+      // Validar que cada hora tenga inicio y fin
+      const horasValidas = horas.every(hora => 
+        hora && typeof hora === 'object' && hora.inicio && hora.fin
+      );
+      
+      if (!horasValidas) {
+        return res.status(400).json({ 
+          message: 'Cada hora debe tener formato: {"inicio": "HH:MM", "fin": "HH:MM"}' 
+        });
+      }
+
+      await docRef.update({
+        [`excepciones.${fecha}`]: horas
+      });
+    }
+    
     res.status(200).json({ message: `Excepción del ${fecha} actualizada.` });
   } catch (error) {
     console.error('Error al actualizar excepción:', error);
     res.status(500).json({ message: 'Error al actualizar excepción.', error });
   }
 });
+
 router.delete('/eliminar-excepcion/:fecha', async (req, res) => {
   const fecha = req.params.fecha; // ej: 2025-06-17
 

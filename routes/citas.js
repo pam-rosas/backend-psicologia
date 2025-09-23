@@ -86,77 +86,180 @@ async function obtenerHorarioValido(fechaISO) {
   return horarioSemanal[diaSemana] || [];
 }
 
+// Función para generar horas individuales desde rangos
+function generarHorasDesdeRangos(rangos) {
+  const horas = [];
+  
+  console.log('Generando horas desde rangos:', rangos);
+  
+  if (!rangos || !Array.isArray(rangos)) {
+    console.log('No hay rangos válidos');
+    return horas;
+  }
+  
+  rangos.forEach((rango, index) => {
+    console.log(`Procesando rango ${index}:`, rango);
+    
+    if (rango && rango.inicio && rango.fin) {
+      const [inicioHora] = rango.inicio.split(':').map(Number);
+      const [finHora] = rango.fin.split(':').map(Number);
+      
+      console.log(`Generando horas desde ${inicioHora} hasta ${finHora}`);
+      
+      // Generar slots de 1 hora desde inicio hasta fin-1
+      for (let hora = inicioHora; hora < finHora; hora++) {
+        const horaFormateada = `${hora.toString().padStart(2, '0')}:00`;
+        horas.push(horaFormateada);
+        console.log(`Hora generada: ${horaFormateada}`);
+      }
+    }
+  });
+  
+  // Remover duplicados y ordenar
+  const horasUnicas = [...new Set(horas)].sort();
+  console.log('Horas únicas finales:', horasUnicas);
+  
+  return horasUnicas;
+}
+
+// Función para generar rangos de horarios disponibles
+function generarRangosDisponibles(rangos) {
+  const horariosDisponibles = [];
+  
+  console.log('Generando rangos disponibles desde:', rangos);
+  
+  if (!rangos || !Array.isArray(rangos)) {
+    console.log('No hay rangos válidos');
+    return horariosDisponibles;
+  }
+  
+  rangos.forEach((rango, index) => {
+    console.log(`Procesando rango ${index}:`, rango);
+    
+    if (rango && rango.inicio && rango.fin) {
+      // Enviar el rango completo con inicio y fin
+      const rangoCompleto = {
+        inicio: rango.inicio,
+        fin: rango.fin,
+        display: `${rango.inicio} - ${rango.fin}`
+      };
+      
+      horariosDisponibles.push(rangoCompleto);
+      console.log(`Rango agregado:`, rangoCompleto);
+    }
+  });
+  
+  console.log('Rangos disponibles finales:', horariosDisponibles);
+  return horariosDisponibles;
+}
 
 router.get('/horarios-disponibles', async (req, res) => {
   const { fecha } = req.query;
+
+  console.log('=== INICIO CONSULTA HORARIOS ===');
+  console.log('Fecha solicitada:', fecha);
 
   if (!fecha) {
     return res.status(400).json({ error: 'Debe proporcionar una fecha (YYYY-MM-DD)' });
   }
 
   try {
-    const diasMap = {
-      'lunes': 'lunes',
-      'martes': 'martes',
-      'miércoles': 'miercoles',
-      'jueves': 'jueves',
-      'viernes': 'viernes',
-      'sábado': 'sabado',
-      'domingo': 'domingo',
-    };
+    // Mapeo de días en español
+    const diasSemana = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+    
+    // Crear fecha en zona horaria de Chile
+    const fechaLocal = moment.tz(fecha, zonaHoraria);
+    const fechaStr = fechaLocal.format('YYYY-MM-DD');
+    const diaSemanaIndex = fechaLocal.day(); // 0 = domingo, 1 = lunes, etc.
+    const diaSemana = diasSemana[diaSemanaIndex];
 
-    const fechaLocal = moment.tz(fecha, zonaHoraria).toDate();
-    const fechaStr = moment(fechaLocal).format('YYYY-MM-DD');
+    console.log('Fecha procesada:', fechaStr);
+    console.log('Día de la semana:', diaSemana);
 
+    // Obtener horario configurado
     const doc = await db.collection('horarios').doc('horario-general').get();
     if (!doc.exists) {
+      console.log('No se encontró configuración de horarios');
       return res.status(404).json({ error: 'No se encontró el horario configurado' });
     }
+    
     const data = doc.data();
-
     const excepciones = data.excepciones || {};
     const horarioSemanal = data.horarioSemanal || {};
 
-    const diaSemanaOriginal = moment(fechaLocal).locale('es').format('dddd').toLowerCase();
-    const diaSemana = diasMap[diaSemanaOriginal] || diaSemanaOriginal;
-
-    console.log('Fecha consultada:', fechaStr);
-    console.log('Día original:', diaSemanaOriginal);
-    console.log('Día corregido:', diaSemana);
-    console.log('Horario semanal:', horarioSemanal[diaSemana]);
-    console.log('Excepciones:', excepciones[fechaStr]);
+    console.log('Horario semanal para', diaSemana, ':', horarioSemanal[diaSemana]);
 
     let tipoHorario = 'semanal';
-    let horariosValidos = [];
+    let rangosValidos = [];
 
+    // Verificar si hay excepción para esta fecha
     if (excepciones.hasOwnProperty(fechaStr)) {
       tipoHorario = 'excepción';
-      horariosValidos = excepciones[fechaStr];
+      rangosValidos = excepciones[fechaStr] || [];
+      console.log('Usando excepción para', fechaStr, ':', rangosValidos);
     } else {
-      horariosValidos = horarioSemanal[diaSemana] || [];
+      rangosValidos = horarioSemanal[diaSemana] || [];
+      console.log(`Usando horario semanal para ${diaSemana}:`, rangosValidos);
     }
 
-    if (!horariosValidos.length) {
-      return res.status(200).json({ fecha, tipoHorario, horariosDisponibles: [] });
+    console.log('Rangos válidos encontrados:', rangosValidos);
+
+    // Generar rangos disponibles (no horas individuales)
+    const horariosDisponiblesCompletos = generarRangosDisponibles(rangosValidos);
+    console.log('Horarios disponibles completos:', horariosDisponiblesCompletos);
+
+    if (horariosDisponiblesCompletos.length === 0) {
+      console.log('No hay horarios válidos para esta fecha');
+      return res.status(200).json({ 
+        fecha: fechaStr, 
+        tipoHorario, 
+        horariosDisponibles: [],
+        debug: {
+          diaSemana,
+          rangosValidos,
+          horarioSemanalCompleto: horarioSemanal
+        }
+      });
     }
 
     // Obtener citas agendadas para la fecha
-    const inicioDia = moment.tz(fechaStr, zonaHoraria).startOf('day').toDate();
-const finDia = moment.tz(fechaStr, zonaHoraria).endOf('day').toDate();
+    const inicioDia = fechaLocal.clone().startOf('day').toDate();
+    const finDia = fechaLocal.clone().endOf('day').toDate();
 
-const snapshot = await db.collection('citas')
-  .where('fecha_hora', '>=', inicioDia)
-  .where('fecha_hora', '<=', finDia)
-  .get();
+    const snapshot = await db.collection('citas')
+      .where('fecha_hora', '>=', inicioDia)
+      .where('fecha_hora', '<=', finDia)
+      .get();
 
-const horasOcupadas = snapshot.docs.map(doc => {
-  const cita = doc.data();
-  return moment.tz(cita.fecha_hora.toDate(), zonaHoraria).format('HH:mm'); // Asegurarse de que sea Date
-});
+    // Filtrar solo citas no canceladas y obtener rangos ocupados
+    const citasActivas = snapshot.docs.filter(doc => {
+      const cita = doc.data();
+      return cita.estado !== 'cancelada';
+    });
 
-    const horariosDisponibles = horariosValidos.filter(hora => !horasOcupadas.includes(hora));
+    const rangosOcupados = citasActivas.map(doc => {
+      const cita = doc.data();
+      const horaInicio = moment.tz(cita.fecha_hora.toDate(), zonaHoraria).format('HH:mm');
+      // Asumir que cada cita dura 1 hora
+      const horaFin = moment.tz(cita.fecha_hora.toDate(), zonaHoraria).add(1, 'hour').format('HH:mm');
+      return `${horaInicio} - ${horaFin}`;
+    });
 
-    return res.status(200).json({ fecha, tipoHorario, horariosDisponibles });
+    console.log('Rangos ocupados:', rangosOcupados);
+
+    // Filtrar horarios disponibles
+    const horariosDisponibles = horariosDisponiblesCompletos.filter(horario => 
+      !rangosOcupados.includes(horario.display)
+    );
+
+    console.log('Horarios disponibles finales:', horariosDisponibles);
+    console.log('=== FIN CONSULTA HORARIOS ===');
+
+    return res.status(200).json({ 
+      fecha: fechaStr, 
+      tipoHorario, 
+      horariosDisponibles // Esto ya son objetos con inicio, fin y display
+    });
 
   } catch (error) {
     console.error('Error al obtener horarios disponibles:', error);
