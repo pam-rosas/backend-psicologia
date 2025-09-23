@@ -13,6 +13,8 @@ const imageRoutes = require('./routes/images');
 // Importar nuevas rutas
 const pageContentRoutes = require('./routes/page-content');
 const mediaRoutes = require('./routes/media');
+const webpayRoutes = require('./routes/webpay');
+
 
 const app = express();
 const port = 3000;
@@ -43,6 +45,8 @@ app.use('/api/login', loginRoutes);
 app.use('/api/taller', tallerRoutes); 
 app.use('/api/horario', horarioRoutes);
 app.use('/api/images', imageRoutes);
+app.use('/api/webpay', webpayRoutes)
+
 // Usar las nuevas rutas
 app.use('/api/page-content', pageContentRoutes);
 app.use('/api/media', mediaRoutes);
