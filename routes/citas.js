@@ -367,11 +367,15 @@ const precio = tratamientoDoc.docs[0].data();
   }
 
   try {
-    // Obtener horarios válidos para esa fecha
-    const horariosValidos = await obtenerHorarioValido(fecha.toDate());
-    console.log('Horarios válidos para la fecha:', horariosValidos, 'Hora seleccionada:', horaSeleccionada);
+    // Obtener horarios válidos para esa fecha (rangos)
+    const rangosHorarios = await obtenerHorarioValido(fecha.toDate());
+    console.log('Rangos de horarios para la fecha:', rangosHorarios);
+    
+    // Convertir rangos a horas individuales
+    const horasIndividuales = generarHorasDesdeRangos(rangosHorarios);
+    console.log('Horas individuales disponibles:', horasIndividuales, 'Hora seleccionada:', horaSeleccionada);
 
-    if (!horariosValidos.includes(horaSeleccionada)) {
+    if (!horasIndividuales.includes(horaSeleccionada)) {
       return res.status(400).json({ error: 'La hora seleccionada no está disponible para esa fecha.' });
     }
 
