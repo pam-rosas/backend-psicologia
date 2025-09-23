@@ -338,7 +338,16 @@ router.delete('/tratamientos/:id', async (req, res) => {
 
 
 router.post('/reservar', async (req, res) => {
-  const { nombre, correo, fecha_hora, tratamiento } = req.body;
+  const { 
+    nombre, 
+    correo, 
+    fecha_hora, 
+    tratamiento,
+    monto,           // ✅ Agregar estos campos
+    estado_pago,     // ✅ 
+    metodo_pago,     // ✅
+    fecha_pago       // ✅
+  } = req.body;
 
   // Validar tratamiento
  const tratamientoDoc = await db.collection('tratamientos')
@@ -388,15 +397,23 @@ const precio = tratamientoDoc.docs[0].data();
       return res.status(400).json({ error: 'Ya hay una cita agendada en esa fecha y hora.' });
     }
 
-    // Guardar la nueva cita
-    const nuevaCita = await db.collection('citas').add({
+    // Guardar la nueva cita con campos adicionales si existen
+    const nuevaCitaData = {
       nombre,
       correo,
-      fecha_hora: fecha.toDate(), // guardar como timestamp
+      fecha_hora: fecha.toDate(),
       tratamiento,
       precio,
       estado: 'pendiente',
-    });
+    };
+
+    // Agregar campos de pago si están presentes
+    if (monto) nuevaCitaData.monto = monto;
+    if (estado_pago) nuevaCitaData.estado_pago = estado_pago;
+    if (metodo_pago) nuevaCitaData.metodo_pago = metodo_pago;
+    if (fecha_pago) nuevaCitaData.fecha_pago = fecha_pago;
+
+    const nuevaCita = await db.collection('citas').add(nuevaCitaData);
 
     console.log('Cita guardada con ID:', nuevaCita.id);
 
@@ -451,6 +468,32 @@ const precio = tratamientoDoc.docs[0].data();
       }
     });
 
+    // Enviar correo adicional a Matías
+    const mailOptionsMatias = {
+      from: 'eduardo@emhpsicoterapia.cl',
+      to: 'matias61100@gmail.com',
+      subject: '📥 Nueva cita reservada - Notificación',
+      html: `
+        <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #e8f5e8; border-radius: 10px; color: #333;">
+          <h2 style="color: #2e7d32;">Nueva reserva confirmada ✅</h2>
+          <p><strong>👤 Nombre del paciente:</strong> ${nombre}</p>
+          <p><strong>✉️ Correo:</strong> ${correo}</p>
+          <p><strong>💆‍♀️ Tratamiento:</strong> ${tratamiento}</p>
+          <p><strong>🗓️ Fecha:</strong> ${fecha.format('DD/MM/YYYY')}</p>
+          <p><strong>🕒 Hora:</strong> ${horaSeleccionada} hrs</p>
+          <p><strong>💰 Precio:</strong> $${precio.precioNacional}</p>
+        </div>
+      `
+    };
+
+    transporter.sendMail(mailOptionsMatias, (error, info) => {
+      if (error) {
+        console.error('Error al enviar correo a Matías:', error);
+      } else {
+        console.log('Correo a Matías enviado:', info.response);
+      }
+    });
+
     return res.status(201).json({
       id: nuevaCita.id,
       nombre,
@@ -459,6 +502,10 @@ const precio = tratamientoDoc.docs[0].data();
       tratamiento,
       precio,
       estado: 'pendiente',
+      ...(monto && { monto }),
+      ...(estado_pago && { estado_pago }),
+      ...(metodo_pago && { metodo_pago }),
+      ...(fecha_pago && { fecha_pago })
     });
 
   } catch (error) {
@@ -655,6 +702,62 @@ router.delete('/cancelar/:id', async (req, res) => {
   }
 });
 
+// Endpoint para notificar a Matías sobre nueva reservación
+router.post('/notificar-reservacion', async (req, res) => {
+  try {
+    const { nombre, correo, tratamiento, fecha, hora, precio } = req.body;
 
+    if (!nombre || !correo || !tratamiento || !fecha || !hora) {
+      return res.status(400).json({ error: 'Faltan datos requeridos para la notificación' });
+    }
+
+    // Enviar correo a Matías
+    const mailOptionsMatias = {
+      from: 'eduardo@emhpsicoterapia.cl',
+      to: 'matias61100@gmail.com',
+      subject: '🎉 Nueva reservación confirmada - Notificación Frontend',
+      html: `
+        <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #e3f2fd; border-radius: 10px; color: #333;">
+          <h2 style="color: #1976d2;">¡Nueva Reservación Confirmada! 🎉</h2>
+          <div style="background-color: white; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #2196f3;">
+            <p><strong>👤 Cliente:</strong> ${nombre}</p>
+            <p><strong>📧 Email:</strong> ${correo}</p>
+            <p><strong>🏥 Tratamiento:</strong> ${tratamiento}</p>
+            <p><strong>📅 Fecha:</strong> ${fecha}</p>
+            <p><strong>⏰ Hora:</strong> ${hora}</p>
+            <p><strong>💰 Precio:</strong> $${precio || 'No especificado'}</p>
+          </div>
+          <p style="font-size: 12px; color: #666; margin-top: 20px;">
+            📱 Notificación enviada desde el frontend de reservaciones
+          </p>
+        </div>
+      `
+    };
+
+    await new Promise((resolve, reject) => {
+      transporter.sendMail(mailOptionsMatias, (error, info) => {
+        if (error) {
+          console.error('Error al enviar correo a Matías:', error);
+          reject(error);
+        } else {
+          console.log('Correo de notificación a Matías enviado:', info.response);
+          resolve(info);
+        }
+      });
+    });
+
+    res.status(200).json({ 
+      success: true,
+      message: 'Notificación enviada exitosamente a Matías' 
+    });
+
+  } catch (error) {
+    console.error('Error en notificar-reservacion:', error);
+    res.status(500).json({ 
+      error: 'Error al enviar notificación',
+      details: error.message 
+    });
+  }
+});
 
 module.exports = router;
