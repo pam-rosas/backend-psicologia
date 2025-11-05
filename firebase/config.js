@@ -5,8 +5,30 @@ const admin = require('firebase-admin');
 // or local file (for development)
 let serviceAccount = null;
 
-// Option 1: Use FIREBASE_SERVICE_ACCOUNT environment variable (JSON string)
-if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+// Option 1: Use individual environment variables (like in Render)
+if (process.env.FIREBASE_PRIVATE_KEY && process.env.FIREBASE_PROJECT_ID) {
+  try {
+    serviceAccount = {
+      type: process.env.FIREBASE_TYPE || "service_account",
+      project_id: process.env.FIREBASE_PROJECT_ID,
+      private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
+      private_key: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'), // Convert \\n to actual newlines
+      client_email: process.env.client_email,
+      client_id: process.env.client_id,
+      auth_uri: process.env.auth_uri || "https://accounts.google.com/o/oauth2/auth",
+      token_uri: process.env.token_uri || "https://oauth2.googleapis.com/token",
+      auth_provider_x509_cert_url: process.env.auth_provider_x509_cert_url || "https://www.googleapis.com/oauth2/v1/certs",
+      client_x509_cert_url: process.env.client_x509_cert_url,
+      universe_domain: process.env.universe_domain || "googleapis.com"
+    };
+    console.log('✅ Credenciales cargadas desde variables de entorno individuales');
+  } catch (err) {
+    console.error('❌ Error construyendo serviceAccount desde variables individuales:', err.message);
+  }
+}
+
+// Option 2: Use FIREBASE_SERVICE_ACCOUNT environment variable (JSON string)
+if (!serviceAccount && process.env.FIREBASE_SERVICE_ACCOUNT) {
   try {
     serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
     console.log('✅ Credenciales cargadas desde variable de entorno FIREBASE_SERVICE_ACCOUNT');
@@ -15,7 +37,7 @@ if (process.env.FIREBASE_SERVICE_ACCOUNT) {
   }
 }
 
-// Option 2: Use GOOGLE_APPLICATION_CREDENTIALS file path
+// Option 3: Use GOOGLE_APPLICATION_CREDENTIALS file path
 if (!serviceAccount && process.env.GOOGLE_APPLICATION_CREDENTIALS) {
   try {
     serviceAccount = require(process.env.GOOGLE_APPLICATION_CREDENTIALS);
@@ -25,7 +47,7 @@ if (!serviceAccount && process.env.GOOGLE_APPLICATION_CREDENTIALS) {
   }
 }
 
-// Option 3: Local file for development
+// Option 4: Local file for development
 if (!serviceAccount) {
   try {
     serviceAccount = require('./key.json.json');
@@ -37,7 +59,7 @@ if (!serviceAccount) {
 
 if (!serviceAccount) {
   console.error('❌ No se encontraron credenciales de Firebase.');
-  console.error('🔧 Para producción, configura la variable FIREBASE_SERVICE_ACCOUNT con el JSON completo');
+  console.error('🔧 Para producción, configura las variables FIREBASE_PRIVATE_KEY, FIREBASE_PROJECT_ID, etc.');
   console.error('🔧 Para desarrollo local, coloca el archivo en firebase/key.json.json');
 }
 
