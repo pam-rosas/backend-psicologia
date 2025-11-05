@@ -24,12 +24,16 @@ const corsOptions = {
   origin: ['https://emhpsicoterapia.cl', 'http://localhost:4200'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH' , 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  optionsSuccessStatus: 200 // Para manejar navegadores legacy
 };
 
 // Middleware
+app.use(cors(corsOptions)); // CORS antes que body-parser
 app.use(bodyParser.json());
-app.use(cors(corsOptions));
+
+// Middleware adicional para manejar preflight requests
+app.options('*', cors(corsOptions));
 
 // Middleware para capturar todas las peticiones
 app.use((req, res, next) => {
@@ -37,19 +41,17 @@ app.use((req, res, next) => {
   next();
 });
 
-// Rutas
-app.use('/api/citas', citasRoutes);
-app.use('/api/comentarios', comentariosRoutes);
+// Rutas - Comentando algunas para encontrar la problemática
 app.use('/api/blog', blogsRoutes);
 app.use('/api/login', loginRoutes);
-app.use('/api/taller', tallerRoutes); 
-app.use('/api/horario', horarioRoutes);
-app.use('/api/images', imageRoutes);
-app.use('/api/webpay', webpayRoutes)
-
-// Usar las nuevas rutas
-app.use('/api/page-content', pageContentRoutes);
-app.use('/api/media', mediaRoutes);
+app.use('/api/comentarios', comentariosRoutes);
+// app.use('/api/citas', citasRoutes);
+// app.use('/api/taller', tallerRoutes); 
+// app.use('/api/horario', horarioRoutes);
+// app.use('/api/images', imageRoutes);
+// app.use('/api/webpay', webpayRoutes)
+// app.use('/api/page-content', pageContentRoutes);
+// app.use('/api/media', mediaRoutes);
 
 
 app.get('/api/admin', verifyToken, (req, res) => {
@@ -60,20 +62,3 @@ app.get('/api/admin', verifyToken, (req, res) => {
 app.listen(port, '0.0.0.0', () => {
   console.log(`Servidor corriendo en http://localhost:${port} - Deploy v2`);
 });
-
-// Verificar que existe: c:\psicologia\backend-psicologia\routes\images.js
-// Y que está siendo importado en index.js
-
-// Si no existe, créalo con este contenido básico:
-const router = express.Router();
-
-// Ruta de prueba
-router.get('/test', (req, res) => {
-  res.json({ 
-    success: true, 
-    message: 'Ruta de imágenes funcionando',
-    timestamp: new Date().toISOString()
-  });
-});
-
-module.exports = router;

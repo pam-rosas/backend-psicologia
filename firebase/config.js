@@ -1,53 +1,104 @@
 // firebase/config.js
 const admin = require('firebase-admin');
 
-// Usar las credenciales directamente desde el archivo key.json.json
-let serviceAccount;
+// Prefer credentials provided by the environment variable
+// (recommended for production): set GOOGLE_APPLICATION_CREDENTIALS to the
+// absolute path of the service account JSON file.
+// Fallback: try to load a local ./key.json.json file (for local development).
+let serviceAccount = null;
+const envPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
 
-try {
-  serviceAccount = require('./key.json.json');
-  console.log('✅ Credenciales cargadas desde key.json.json');
-} catch (error) {
-  console.log('⚠️ No se pudo cargar key.json.json, usando credenciales hardcodeadas');
-  serviceAccount = {
-    type: "service_account",
-    project_id: "psicoterapia-7fb0d",
-    private_key_id: "75d64566506061131075c331c3401033e3611b14",
-    private_key: "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCPUbw+Tsl4D1El\nB6UtcSAu0R2Hm0Rt91vjAe7pJGYPRDcoAWjVks+xVUjgGkydHnDNI1pfz4Y1eOPV\nsE+2RV29UGWe10SFpeGP8rAgWopjr6T5Z8CTAFttKGhHnUoPOWyitD9CIWkN6mbC\n4LQRD6yIJj6H5IxT2klZo8FffftwiJPVeXHjoh6IV56PonPLn1kELE0Bg1Ifw04W\n0yjVI44yU2tysCkDcQr2CyrMNwX702DmAhMUe8W6yAYscIIUbvHmHSjxh4BfEyKq\nrUJIpUBxFGLS9UJjHamUPnH/QIRJLDU5lfGk27BrnXnU6FOkS/FC7zjZUXU/G8Q2\nPndAoyyTAgMBAAECggEALn3BtmahdVhmpr/9pamSWo2Maj6EarW4sYGhijC8CMzE\npa4bX1jSFgEH9Gajnr5OskT7HqR3sWXnZpzcptCGsZBgfq/vMvmWG7eKydwFE4RZ\nXGx7LFSL0/OtLDoKWbjzlC4rbRzgctqsfiAdWYF/ouThGP0bRmJDtBfqdTstcxnm\ngrnurFMGpRjOju53KELqxsoSE2TL8H5pyYtwb/WktPehKed6bbzqGG9vA0PHbLsW\nAiMKrCvIuTFZiJ3yC+qOAxN2KzMtlt1iIvzkmQiptHODwrzo6QFN4tBBgPU6RZZv\nflyjgu38BIsc9ZD6Q3tWgh2Yrgl+lJmMocBDXndnJQKBgQDKLb02Gexw7ifSp2UR\nT86wVCEPY+lEj5w5/uFW8v9ONpApOrtYxtYD0swhoD2c1uYqQgz855JK36PCqqTA\n+ZTlJfv4l0zB0NDZrdNzm9MUXOR5NqKW9t0t0QYE/2L8MhH3007l3kY5VLVuk80Z\nloBvgmE6qbjjABEL8h7N/vhbVQKBgQC1eMqf4yUz1dwca8VN1eFAfRLGPaxdRoaN\ntX04dKCrJaIz43npfdZUQR8MONG4FVUfy3KLjJJV6AseMj+1KUU7zsv2AjNdh4Wd\nuf0yYAEGAfo9gH+jMYKQPnowBJIkVU0gggm7N1FsoYXIqu91E580pNPTNq4vRkug\nrcpnlyp4RwKBgDfjFN6To+xDqPZuF14FtZjAaLMcZyrwl7rgXeHvIeu44XjEJ22O\n6TH9XzgcV2u3a8BaqcRvLt1LnLT+/rPpSeNd8JzzFeCtnE3P4xeeB2cllnJ7S853\nRwSXNxbCkdYs8RKUcsbP/pFyfQSoDpX4KGCqpb3VlKoLJqsqrqE6zeRRAoGACuP1\n3QSHrgWukPISxCoKu5EF+GmpF2vtFUIIAsRVBBBdHJoRLecEXsgNsfES/OYi1qah\n+Cf2fDtRt30yf4+7fOxbJydYp8tDRITt4gEK7q5dsyUsA8Ir4LYvJQSRNKb92u6S\n4O5f75H98l33wuHrkwA1Sh6k82dXkIv9cpwKy28CgYEAlPut4TAkYRiHgQhP0ezC\nQVILevn8vfgSeBUKtROsvEZwzwF/l/5LoCRIZv22YEkfiacju3XADBfO+Ip5OoJ0\nUml3ADtQpASQKsp6c9idBfh7tkfTa3v+TNDkwSdD8Izs5I2SeOwIJZH1WnrT0qKk\n2KA2dQxvTZ67RS7zrNycJi4=\n-----END PRIVATE KEY-----\n",
-    client_email: "firebase-adminsdk-fbsvc@psicoterapia-7fb0d.iam.gserviceaccount.com",
-    client_id: "114019932203655106575",
-    auth_uri: "https://accounts.google.com/o/oauth2/auth",
-    token_uri: "https://oauth2.googleapis.com/token"
-  };
+if (envPath) {
+  try {
+    serviceAccount = require(envPath);
+    console.log(`✅ Credenciales cargadas desde ruta indicada en GOOGLE_APPLICATION_CREDENTIALS: ${envPath}`);
+  } catch (err) {
+    console.warn(`⚠️ No se pudo cargar credenciales desde GOOGLE_APPLICATION_CREDENTIALS (${envPath}):`, err.message);
+  }
 }
 
-// Inicializar Firebase solo si no está ya inicializado
+if (!serviceAccount) {
+  try {
+    // Intentar carga local por compatibilidad con el repo actual
+    serviceAccount = require('./key.json.json');
+    console.log('✅ Credenciales cargadas desde firebase/key.json.json (fall back local)');
+  } catch (err) {
+    console.warn('⚠️ No se encontró firebase/key.json.json. Si estás en producción, establece GOOGLE_APPLICATION_CREDENTIALS.');
+  }
+}
+
+if (!serviceAccount) {
+  console.error('❌ No se han encontrado credenciales de servicio de Firebase.');
+  console.error('🔧 SOLUCIÓN: Genera y descarga una clave de cuenta de servicio desde:');
+  console.error('   1) https://console.firebase.google.com');
+  console.error('   2) Selecciona tu proyecto → Configuración (engranaje) → Cuentas de servicio');
+  console.error('   3) Generar nueva clave privada → guardar el JSON en el servidor');
+  console.error('   4) Definir la variable de entorno GOOGLE_APPLICATION_CREDENTIALS con la ruta absoluta de ese JSON');
+}
+
+// Configuración completa de Firebase
+const firebaseConfig = {
+  apiKey: "AIzaSyB20a_8NRHpl0HL6Cjq9iovs0ffLVPoDRk",
+  authDomain: "psicoterapia-7fb0d.firebaseapp.com",
+  projectId: "psicoterapia-7fb0d",
+  storageBucket: "psicoterapia-7fb0d.appspot.com",
+  messagingSenderId: "256703380974",
+  appId: "1:256703380974:web:4b0896f5dc2cfcdfd7a2ff"
+};
+
+// Inicializar Firebase solo si hay credenciales disponibles
 if (!admin.apps.length) {
   try {
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-      databaseURL: 'https://psicoterapia-7fb0d.firebaseio.com'
-    });
-    console.log('Firebase inicializado correctamente');
+    if (!serviceAccount) {
+      console.warn('⚠️ Inicializando Firebase sin credenciales. Las operaciones a Firestore fallarán hasta que se provean credenciales válidas.');
+      // Inicializar de todas formas para permitir uso parcial (por ejemplo, emuladores)
+      admin.initializeApp();
+    } else {
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+        ...firebaseConfig
+      });
+      console.log('✅ Firebase inicializado correctamente');
+    }
   } catch (error) {
-    console.error('Error al inicializar Firebase:', error);
-    throw error;
+    console.error('❌ Error al inicializar Firebase:', error.message);
   }
 } else {
-  admin.app();
-  console.log('Firebase ya estaba inicializado');
+  console.log('ℹ️ Firebase ya estaba inicializado');
 }
 
-// Exportar la instancia de Firestore
 const db = admin.firestore();
 
-// Test de conexión
-db.collection('test').limit(1).get()
-  .then(() => {
-    console.log('✅ Conexión a Firestore exitosa');
-  })
-  .catch(error => {
-    console.error('❌ Error de conexión a Firestore:', error.message);
-  });
+// Función para verificar si Firebase está funcionando (safe)
+const isFirebaseWorking = async () => {
+  try {
+    await db.collection('test').limit(1).get();
+    return true;
+  } catch (error) {
+    console.error('Firebase no funciona:', error.message);
+    return false;
+  }
+};
 
-module.exports = db;
+// Logueo de verificación no-blocking: intenta una lectura simple y emite recomendaciones
+(async () => {
+  try {
+    await db.collection('test').limit(1).get();
+    console.log('✅ Conexión a Firestore (lectura) exitosa');
+  } catch (error) {
+    console.error('❌ Error de conexión a Firestore (lectura):', error.message);
+    if (error.code === 16 || (error.message && error.message.toUpperCase().includes('UNAUTHENTICATED'))) {
+      console.error('🔧 SOLUCIÓN: Las credenciales de Firebase necesitan ser regeneradas o la variable GOOGLE_APPLICATION_CREDENTIALS no está configurada.');
+      console.error('📝 Pasos sugeridos:');
+      console.error('   1. Ve a https://console.firebase.google.com');
+      console.error('   2. Proyecto: psicoterapia-7fb0d');
+      console.error('   3. Configuración → Cuentas de servicio');
+      console.error('   4. Generar nueva clave privada → descargar JSON');
+      console.error('   5. Subir ese JSON al servidor y establecer:');
+      console.error('      setx GOOGLE_APPLICATION_CREDENTIALS "C:\ruta\a\firebase\key.json.json"');
+      console.error('      (o configúralo en tu entorno de despliegue)');
+    }
+  }
+})();
+
+module.exports = { db, isFirebaseWorking };
