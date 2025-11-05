@@ -1,71 +1,8 @@
-// index.js - Production entry pointconst express = require('express');
-
-// Uses pure-server.js to avoid path-to-regexp issues with Expressconst bodyParser = require('body-parser');
-
-const cors = require('cors');
+// index.js - Production entry point
+// Uses pure-server.js to avoid path-to-regexp issues with Express
 
 console.log('🚀 Iniciando servidor para producción...');
+console.log('📝 Usando pure-server.js (HTTP nativo) para evitar errores de Express/path-to-regexp');
 
-console.log('📝 Usando pure-server.js (HTTP nativo) para evitar errores de Express/path-to-regexp');const verifyToken = require('./middlewares/verifyToken');
-
-const loginRoutes = require('./routes/login');
-
-// Cargar el servidor puro que ya funciona perfectamenteconst citasRoutes = require('./routes/citas');
-
-require('./pure-server.js');const comentariosRoutes = require('./routes/comentarios');
-const blogsRoutes = require('./routes/blog');
-const tallerRoutes = require('./routes/taller');
-const horarioRoutes = require('./routes/horario');
-const imageRoutes = require('./routes/images');
-// Importar nuevas rutas
-const pageContentRoutes = require('./routes/page-content');
-const mediaRoutes = require('./routes/media');
-const webpayRoutes = require('./routes/webpay');
-
-
-const app = express();
-const port = 3000;
-
-// Configuración de CORS más específica
-const corsOptions = {
-  origin: ['https://emhpsicoterapia.cl', 'http://localhost:4200'],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH' , 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
-  optionsSuccessStatus: 200 // Para manejar navegadores legacy
-};
-
-// Middleware
-app.use(cors(corsOptions)); // CORS antes que body-parser
-app.use(bodyParser.json());
-
-// Middleware adicional para manejar preflight requests
-app.options('*', cors(corsOptions));
-
-// Middleware para capturar todas las peticiones
-app.use((req, res, next) => {
-  console.log(`${req.method} ${req.url} - Body:`, req.body );
-  next();
-});
-
-// Rutas - Comentando algunas para encontrar la problemática
-app.use('/api/blog', blogsRoutes);
-app.use('/api/login', loginRoutes);
-app.use('/api/comentarios', comentariosRoutes);
-// app.use('/api/citas', citasRoutes);
-// app.use('/api/taller', tallerRoutes); 
-// app.use('/api/horario', horarioRoutes);
-// app.use('/api/images', imageRoutes);
-// app.use('/api/webpay', webpayRoutes)
-// app.use('/api/page-content', pageContentRoutes);
-// app.use('/api/media', mediaRoutes);
-
-
-app.get('/api/admin', verifyToken, (req, res) => {
-  res.status(200).json({ message: 'Bienvenido a la sección de administrador', user: req.user });
-});
-
-// Iniciar servidor
-app.listen(port, '0.0.0.0', () => {
-  console.log(`Servidor corriendo en http://localhost:${port} - Deploy v2`);
-});
+// Cargar el servidor puro que ya funciona perfectamente
+require('./pure-server.js');
