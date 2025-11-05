@@ -1,39 +1,44 @@
 // firebase/config.js
 const admin = require('firebase-admin');
 
-// Prefer credentials provided by the environment variable
-// (recommended for production): set GOOGLE_APPLICATION_CREDENTIALS to the
-// absolute path of the service account JSON file.
-// Fallback: try to load a local ./key.json.json file (for local development).
+// Firebase credentials from environment variables (for production)
+// or local file (for development)
 let serviceAccount = null;
-const envPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
 
-if (envPath) {
+// Option 1: Use FIREBASE_SERVICE_ACCOUNT environment variable (JSON string)
+if (process.env.FIREBASE_SERVICE_ACCOUNT) {
   try {
-    serviceAccount = require(envPath);
-    console.log(`✅ Credenciales cargadas desde ruta indicada en GOOGLE_APPLICATION_CREDENTIALS: ${envPath}`);
+    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    console.log('✅ Credenciales cargadas desde variable de entorno FIREBASE_SERVICE_ACCOUNT');
   } catch (err) {
-    console.warn(`⚠️ No se pudo cargar credenciales desde GOOGLE_APPLICATION_CREDENTIALS (${envPath}):`, err.message);
+    console.error('❌ Error parseando FIREBASE_SERVICE_ACCOUNT:', err.message);
   }
 }
 
+// Option 2: Use GOOGLE_APPLICATION_CREDENTIALS file path
+if (!serviceAccount && process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+  try {
+    serviceAccount = require(process.env.GOOGLE_APPLICATION_CREDENTIALS);
+    console.log(`✅ Credenciales cargadas desde GOOGLE_APPLICATION_CREDENTIALS: ${process.env.GOOGLE_APPLICATION_CREDENTIALS}`);
+  } catch (err) {
+    console.warn(`⚠️ No se pudo cargar credenciales desde GOOGLE_APPLICATION_CREDENTIALS:`, err.message);
+  }
+}
+
+// Option 3: Local file for development
 if (!serviceAccount) {
   try {
-    // Intentar carga local por compatibilidad con el repo actual
     serviceAccount = require('./key.json.json');
-    console.log('✅ Credenciales cargadas desde firebase/key.json.json (fall back local)');
+    console.log('✅ Credenciales cargadas desde firebase/key.json.json (desarrollo local)');
   } catch (err) {
-    console.warn('⚠️ No se encontró firebase/key.json.json. Si estás en producción, establece GOOGLE_APPLICATION_CREDENTIALS.');
+    console.warn('⚠️ No se encontró firebase/key.json.json (normal en producción)');
   }
 }
 
 if (!serviceAccount) {
-  console.error('❌ No se han encontrado credenciales de servicio de Firebase.');
-  console.error('🔧 SOLUCIÓN: Genera y descarga una clave de cuenta de servicio desde:');
-  console.error('   1) https://console.firebase.google.com');
-  console.error('   2) Selecciona tu proyecto → Configuración (engranaje) → Cuentas de servicio');
-  console.error('   3) Generar nueva clave privada → guardar el JSON en el servidor');
-  console.error('   4) Definir la variable de entorno GOOGLE_APPLICATION_CREDENTIALS con la ruta absoluta de ese JSON');
+  console.error('❌ No se encontraron credenciales de Firebase.');
+  console.error('🔧 Para producción, configura la variable FIREBASE_SERVICE_ACCOUNT con el JSON completo');
+  console.error('🔧 Para desarrollo local, coloca el archivo en firebase/key.json.json');
 }
 
 // Configuración completa de Firebase
