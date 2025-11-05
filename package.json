@@ -1,7 +1,7 @@
 {
   "name": "backend-psico",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "pure-server.js",
   "scripts": {
     "start": "node pure-server.js",
     "dev": "node index.js",

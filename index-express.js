@@ -1,18 +1,11 @@
-// index.js - Production entry pointconst express = require('express');
-
-// Uses pure-server.js to avoid path-to-regexp issues with Expressconst bodyParser = require('body-parser');
-
+const express = require('express');
+const bodyParser = require('body-parser');
 const cors = require('cors');
 
-console.log('🚀 Iniciando servidor para producción...');
-
-console.log('📝 Usando pure-server.js (HTTP nativo) para evitar errores de Express/path-to-regexp');const verifyToken = require('./middlewares/verifyToken');
-
+const verifyToken = require('./middlewares/verifyToken');
 const loginRoutes = require('./routes/login');
-
-// Cargar el servidor puro que ya funciona perfectamenteconst citasRoutes = require('./routes/citas');
-
-require('./pure-server.js');const comentariosRoutes = require('./routes/comentarios');
+const citasRoutes = require('./routes/citas');
+const comentariosRoutes = require('./routes/comentarios');
 const blogsRoutes = require('./routes/blog');
 const tallerRoutes = require('./routes/taller');
 const horarioRoutes = require('./routes/horario');
