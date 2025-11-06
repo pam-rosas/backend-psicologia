@@ -25,8 +25,25 @@ let blogs = [
   { id: '1', titulo: 'Blog de prueba', texto: 'Contenido de ejemplo', imagen: '', videoUrl: '', fecha: new Date().toISOString() }
 ];
 
+// Obtener headers CORS
+const getCorsHeaders = (origin, additionalHeaders = {}) => {
+  return {
+    'Access-Control-Allow-Origin': origin || '*',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS, PATCH',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, Accept',
+    'Access-Control-Allow-Credentials': 'true',
+    ...additionalHeaders
+  };
+};
+
+// Enviar JSON con CORS
+const sendJSON = (res, statusCode, data, origin) => {
+  res.writeHead(statusCode, getCorsHeaders(origin, { 'Content-Type': 'application/json' }));
+  res.end(JSON.stringify(data));
+};
+
 const server = http.createServer((req, res) => {
-  // CORS headers
+  const origin = req.headers.origin;
   const allowedOrigins = [
     'http://localhost:4200',
     'https://emhpsicoterapia.cl',
@@ -34,14 +51,14 @@ const server = http.createServer((req, res) => {
     'https://psicoterapia-frontend.onrender.com'
   ];
   
-  const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-  }
+  // Validar origen
+  const validOrigin = allowedOrigins.includes(origin) ? origin : null;
   
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  // Establecer headers CORS para todas las respuestas
+  const corsHeaders = getCorsHeaders(validOrigin);
+  Object.entries(corsHeaders).forEach(([key, value]) => {
+    res.setHeader(key, value);
+  });
   
   // Handle preflight requests
   if (req.method === 'OPTIONS') {
@@ -178,9 +195,7 @@ const server = http.createServer((req, res) => {
         console.log('🎓 Creando taller:', data);
         
         if (!data.subtitulo || !data.fechaInicio || !data.valor || !data.facilitador || !data.descripcionDeServicio || !data.proximasSesiones || data.proximasSesiones.length === 0 || !data.politicaDeCancelacion || !data.datosDeContacto) {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ message: 'Datos incompletos.' }));
-          return;
+          return sendJSON(res, 400, { message: 'Datos incompletos.' }, validOrigin);
         }
 
         const taller = {
@@ -211,25 +226,19 @@ const server = http.createServer((req, res) => {
             }
           } catch (fbError) {
             console.error('❌ Error en Firebase:', fbError.message);
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ message: 'Error al guardar en Firebase', error: fbError.message }));
-            return;
+            return sendJSON(res, 500, { message: 'Error al guardar en Firebase', error: fbError.message }, validOrigin);
           }
         } else {
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ message: 'Firebase no está disponible' }));
-          return;
+          return sendJSON(res, 500, { message: 'Firebase no está disponible' }, validOrigin);
         }
         
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ 
+        sendJSON(res, 200, { 
           message: 'Taller de Duelo guardado con éxito', 
           id: tallerId
-        }));
+        }, validOrigin);
       } catch (error) {
         console.error('Error al crear taller:', error);
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ message: 'Error interno del servidor', error: error.message }));
+        sendJSON(res, 500, { message: 'Error interno del servidor', error: error.message }, validOrigin);
       }
     });
     return;
@@ -254,22 +263,16 @@ const server = http.createServer((req, res) => {
             }
           } catch (fbError) {
             console.error('❌ Error obteniendo talleres de Firebase:', fbError.message);
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ message: 'Error al obtener talleres', error: fbError.message }));
-            return;
+            return sendJSON(res, 500, { message: 'Error al obtener talleres', error: fbError.message }, validOrigin);
           }
         } else {
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ message: 'Firebase no está disponible' }));
-          return;
+          return sendJSON(res, 500, { message: 'Firebase no está disponible' }, validOrigin);
         }
         
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(talleresToReturn));
+        sendJSON(res, 200, talleresToReturn, validOrigin);
       } catch (error) {
         console.error('Error obteniendo talleres:', error);
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ message: 'Error obteniendo talleres', error: error.message }));
+        sendJSON(res, 500, { message: 'Error obteniendo talleres', error: error.message }, validOrigin);
       }
     };
     
@@ -290,9 +293,7 @@ const server = http.createServer((req, res) => {
         console.log('✏️ Editando taller:', tallerId);
         
         if (!data.subtitulo || !data.fechaInicio || !data.valor || !data.facilitador || !data.descripcionDeServicio || !data.proximasSesiones || data.proximasSesiones.length === 0 || !data.politicaDeCancelacion || !data.datosDeContacto) {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ message: 'Datos incompletos para la edición.' }));
-          return;
+          return sendJSON(res, 400, { message: 'Datos incompletos para la edición.' }, validOrigin);
         }
 
         const tallerActualizado = {
@@ -316,9 +317,7 @@ const server = http.createServer((req, res) => {
               const doc = await tallerRef.get();
               
               if (!doc.exists) {
-                res.writeHead(404, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ message: 'Taller no encontrado.' }));
-                return;
+                return sendJSON(res, 404, { message: 'Taller no encontrado.' }, validOrigin);
               }
               
               await tallerRef.update(tallerActualizado);
@@ -328,22 +327,16 @@ const server = http.createServer((req, res) => {
             }
           } catch (fbError) {
             console.error('❌ Error actualizando en Firebase:', fbError.message);
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ message: 'Error al actualizar en Firebase', error: fbError.message }));
-            return;
+            return sendJSON(res, 500, { message: 'Error al actualizar en Firebase', error: fbError.message }, validOrigin);
           }
         } else {
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ message: 'Firebase no está disponible' }));
-          return;
+          return sendJSON(res, 500, { message: 'Firebase no está disponible' }, validOrigin);
         }
         
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ message: 'Taller actualizado con éxito' }));
+        sendJSON(res, 200, { message: 'Taller actualizado con éxito' }, validOrigin);
       } catch (error) {
         console.error('Error al editar taller:', error);
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ message: 'Error interno del servidor', error: error.message }));
+        sendJSON(res, 500, { message: 'Error interno del servidor', error: error.message }, validOrigin);
       }
     });
     return;
@@ -363,9 +356,7 @@ const server = http.createServer((req, res) => {
               const doc = await tallerRef.get();
               
               if (!doc.exists) {
-                res.writeHead(404, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ message: 'Taller no encontrado.' }));
-                return;
+                return sendJSON(res, 404, { message: 'Taller no encontrado.' }, validOrigin);
               }
               
               await tallerRef.delete();
@@ -375,22 +366,16 @@ const server = http.createServer((req, res) => {
             }
           } catch (fbError) {
             console.error('❌ Error eliminando de Firebase:', fbError.message);
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ message: 'Error al eliminar de Firebase', error: fbError.message }));
-            return;
+            return sendJSON(res, 500, { message: 'Error al eliminar de Firebase', error: fbError.message }, validOrigin);
           }
         } else {
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ message: 'Firebase no está disponible' }));
-          return;
+          return sendJSON(res, 500, { message: 'Firebase no está disponible' }, validOrigin);
         }
         
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ message: 'Taller eliminado con éxito.' }));
+        sendJSON(res, 200, { message: 'Taller eliminado con éxito.' }, validOrigin);
       } catch (error) {
         console.error('Error al eliminar taller:', error);
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ message: 'Error interno del servidor', error: error.message }));
+        sendJSON(res, 500, { message: 'Error interno del servidor', error: error.message }, validOrigin);
       }
     };
     
