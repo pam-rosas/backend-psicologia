@@ -537,12 +537,12 @@ const server = http.createServer((req, res) => {
   res.end(JSON.stringify({ message: 'Ruta no encontrada' }));
 });
 
-const port = 3000;
+const port = process.env.PORT || 3000;
 server.listen(port, () => {
   console.log(`🚀 Servidor HTTP puro funcionando en puerto ${port}`);
-  console.log(`� Firebase: ${db ? '✅ Conectado' : '❌ No disponible'}`);
+  console.log(`🔥 Firebase: ${db ? '✅ Conectado' : '❌ No disponible'}`);
   if (firebaseError) {
     console.log(`🔥 Error Firebase: ${firebaseError}`);
   }
-  console.log(`�📚 ${blogs.length} blogs iniciales cargados`);
+  console.log(`📚 ${blogs.length} blogs iniciales cargados`);
 });
