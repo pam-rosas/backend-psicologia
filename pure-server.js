@@ -162,6 +162,240 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // ======= RUTAS DE TALLER =======
+  
+  // Crear taller
+  if (method === 'POST' && path === '/api/taller/crear') {
+    let body = '';
+    req.on('data', chunk => {
+      body += chunk.toString();
+    });
+    req.on('end', async () => {
+      try {
+        const data = JSON.parse(body);
+        console.log('🎓 Creando taller:', data);
+        
+        if (!data.subtitulo || !data.fechaInicio || !data.valor || !data.facilitador || !data.descripcionDeServicio || !data.proximasSesiones || data.proximasSesiones.length === 0 || !data.politicaDeCancelacion || !data.datosDeContacto) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ message: 'Datos incompletos.' }));
+          return;
+        }
+
+        const taller = {
+          titulo: "Taller de Duelo",
+          subtitulo: data.subtitulo,
+          fechaInicio: data.fechaInicio,
+          valor: data.valor,
+          facilitador: data.facilitador,
+          descripcionDeServicio: data.descripcionDeServicio.texto,
+          proximasSesiones: data.proximasSesiones,
+          politicaDeCancelacion: data.politicaDeCancelacion.texto,
+          datosDeContacto: data.datosDeContacto.texto,
+          creadoEn: new Date().toISOString()
+        };
+
+        let tallerId;
+        
+        // Intentar guardar en Firebase primero
+        if (db && isFirebaseWorking) {
+          try {
+            const firebaseWorks = await isFirebaseWorking();
+            if (firebaseWorks) {
+              const docRef = await db.collection('talleres').add(taller);
+              tallerId = docRef.id;
+              console.log('✅ Taller guardado en Firebase con ID:', tallerId);
+            } else {
+              throw new Error('Firebase no está respondiendo');
+            }
+          } catch (fbError) {
+            console.error('❌ Error en Firebase:', fbError.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ message: 'Error al guardar en Firebase', error: fbError.message }));
+            return;
+          }
+        } else {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ message: 'Firebase no está disponible' }));
+          return;
+        }
+        
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ 
+          message: 'Taller de Duelo guardado con éxito', 
+          id: tallerId
+        }));
+      } catch (error) {
+        console.error('Error al crear taller:', error);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ message: 'Error interno del servidor', error: error.message }));
+      }
+    });
+    return;
+  }
+
+  // Obtener todos los talleres
+  if (method === 'GET' && path === '/api/taller/lista') {
+    const handleGetTalleres = async () => {
+      try {
+        let talleresToReturn = [];
+        
+        // Intentar obtener de Firebase
+        if (db && isFirebaseWorking) {
+          try {
+            const firebaseWorks = await isFirebaseWorking();
+            if (firebaseWorks) {
+              const snapshot = await db.collection('talleres').orderBy('creadoEn', 'desc').get();
+              talleresToReturn = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+              console.log('📚 Talleres obtenidos de Firebase:', talleresToReturn.length);
+            } else {
+              throw new Error('Firebase no está respondiendo');
+            }
+          } catch (fbError) {
+            console.error('❌ Error obteniendo talleres de Firebase:', fbError.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ message: 'Error al obtener talleres', error: fbError.message }));
+            return;
+          }
+        } else {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ message: 'Firebase no está disponible' }));
+          return;
+        }
+        
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(talleresToReturn));
+      } catch (error) {
+        console.error('Error obteniendo talleres:', error);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ message: 'Error obteniendo talleres', error: error.message }));
+      }
+    };
+    
+    handleGetTalleres();
+    return;
+  }
+
+  // Editar taller
+  if (method === 'PUT' && path.startsWith('/api/taller/editar/')) {
+    const tallerId = path.split('/').pop();
+    let body = '';
+    req.on('data', chunk => {
+      body += chunk.toString();
+    });
+    req.on('end', async () => {
+      try {
+        const data = JSON.parse(body);
+        console.log('✏️ Editando taller:', tallerId);
+        
+        if (!data.subtitulo || !data.fechaInicio || !data.valor || !data.facilitador || !data.descripcionDeServicio || !data.proximasSesiones || data.proximasSesiones.length === 0 || !data.politicaDeCancelacion || !data.datosDeContacto) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ message: 'Datos incompletos para la edición.' }));
+          return;
+        }
+
+        const tallerActualizado = {
+          titulo: "Taller de Duelo",
+          subtitulo: data.subtitulo,
+          fechaInicio: data.fechaInicio,
+          valor: data.valor,
+          facilitador: data.facilitador,
+          descripcionDeServicio: data.descripcionDeServicio.texto,
+          proximasSesiones: data.proximasSesiones,
+          politicaDeCancelacion: data.politicaDeCancelacion.texto,
+          datosDeContacto: data.datosDeContacto.texto,
+          actualizadoEn: new Date().toISOString()
+        };
+        
+        if (db && isFirebaseWorking) {
+          try {
+            const firebaseWorks = await isFirebaseWorking();
+            if (firebaseWorks) {
+              const tallerRef = db.collection('talleres').doc(tallerId);
+              const doc = await tallerRef.get();
+              
+              if (!doc.exists) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ message: 'Taller no encontrado.' }));
+                return;
+              }
+              
+              await tallerRef.update(tallerActualizado);
+              console.log('✅ Taller actualizado en Firebase');
+            } else {
+              throw new Error('Firebase no está respondiendo');
+            }
+          } catch (fbError) {
+            console.error('❌ Error actualizando en Firebase:', fbError.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ message: 'Error al actualizar en Firebase', error: fbError.message }));
+            return;
+          }
+        } else {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ message: 'Firebase no está disponible' }));
+          return;
+        }
+        
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ message: 'Taller actualizado con éxito' }));
+      } catch (error) {
+        console.error('Error al editar taller:', error);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ message: 'Error interno del servidor', error: error.message }));
+      }
+    });
+    return;
+  }
+
+  // Eliminar taller
+  if (method === 'DELETE' && path.startsWith('/api/taller/eliminar/')) {
+    const tallerId = path.split('/').pop();
+    
+    const handleDeleteTaller = async () => {
+      try {
+        if (db && isFirebaseWorking) {
+          try {
+            const firebaseWorks = await isFirebaseWorking();
+            if (firebaseWorks) {
+              const tallerRef = db.collection('talleres').doc(tallerId);
+              const doc = await tallerRef.get();
+              
+              if (!doc.exists) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ message: 'Taller no encontrado.' }));
+                return;
+              }
+              
+              await tallerRef.delete();
+              console.log('✅ Taller eliminado de Firebase');
+            } else {
+              throw new Error('Firebase no está respondiendo');
+            }
+          } catch (fbError) {
+            console.error('❌ Error eliminando de Firebase:', fbError.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ message: 'Error al eliminar de Firebase', error: fbError.message }));
+            return;
+          }
+        } else {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ message: 'Firebase no está disponible' }));
+          return;
+        }
+        
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ message: 'Taller eliminado con éxito.' }));
+      } catch (error) {
+        console.error('Error al eliminar taller:', error);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ message: 'Error interno del servidor', error: error.message }));
+      }
+    };
+    
+    handleDeleteTaller();
+    return;
+  }
+
   // 🔐 Ruta de login de administrador
   if (method === 'POST' && path === '/api/login') {
     let body = '';
