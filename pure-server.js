@@ -473,6 +473,37 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // ======= RUTAS DE CITAS =======
+
+  // Obtener todas las citas
+  if (method === 'GET' && path === '/api/citas/ver') {
+    const handleGetCitas = async () => {
+      try {
+        if (db && isFirebaseWorking) {
+          const firebaseWorks = await isFirebaseWorking();
+          if (firebaseWorks) {
+            const snapshot = await db.collection('citas').orderBy('fecha_hora', 'desc').get();
+            const citas = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            
+            res.writeHead(200, getCorsHeaders(validOrigin, { 'Content-Type': 'application/json' }));
+            res.end(JSON.stringify(citas));
+            return;
+          }
+        }
+        
+        res.writeHead(500, getCorsHeaders(validOrigin, { 'Content-Type': 'application/json' }));
+        res.end(JSON.stringify({ message: 'Firebase no disponible' }));
+      } catch (error) {
+        console.error('Error obteniendo citas:', error.message);
+        res.writeHead(500, getCorsHeaders(validOrigin, { 'Content-Type': 'application/json' }));
+        res.end(JSON.stringify({ message: 'Error obteniendo citas', error: error.message }));
+      }
+    };
+    
+    handleGetCitas();
+    return;
+  }
+
   // RUTAS DE TRATAMIENTOS
   
   // Obtener todos los tratamientos
