@@ -488,6 +488,171 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // RUTAS DE TRATAMIENTOS
+  
+  // Obtener todos los tratamientos
+  if (method === 'GET' && path === '/api/citas/tratamientos') {
+    const handleGetTratamientos = async () => {
+      try {
+        console.log('DEBUG: Obteniendo tratamientos');
+        
+        if (db && isFirebaseWorking) {
+          const firebaseWorks = await isFirebaseWorking();
+          if (firebaseWorks) {
+            const snapshot = await db.collection('tratamientos').get();
+            const tratamientos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            console.log('DEBUG: Tratamientos obtenidos de Firebase:', tratamientos.length);
+            
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(tratamientos));
+            return;
+          }
+        }
+        
+        console.log('DEBUG: Firebase no disponible');
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ message: 'Firebase no disponible' }));
+      } catch (error) {
+        console.log('DEBUG: Error obteniendo tratamientos:', error.message);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ message: 'Error obteniendo tratamientos', error: error.message }));
+      }
+    };
+    
+    handleGetTratamientos();
+    return;
+  }
+
+  // Crear nuevo tratamiento
+  if (method === 'POST' && path === '/api/citas/tratamientos') {
+    let body = '';
+    req.on('data', chunk => {
+      body += chunk.toString();
+    });
+    req.on('end', async () => {
+      try {
+        const data = JSON.parse(body);
+        console.log('DEBUG: Creando tratamiento:', data);
+        
+        if (!data.nombre || !data.precioNacional) {
+          console.log('DEBUG: Datos incompletos');
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ message: 'Nombre y precio nacional son requeridos' }));
+          return;
+        }
+
+        const tratamiento = {
+          nombre: data.nombre,
+          precioNacional: data.precioNacional,
+          precioInternacional: data.precioInternacional || 0,
+          sesiones: data.sesiones || 1,
+          duracion: data.duracion || '',
+          descripcion: data.descripcion || '',
+          activo: data.activo !== undefined ? data.activo : true,
+          creadoEn: new Date()
+        };
+
+        if (db && isFirebaseWorking) {
+          const firebaseWorks = await isFirebaseWorking();
+          if (firebaseWorks) {
+            const docRef = await db.collection('tratamientos').add(tratamiento);
+            console.log('DEBUG: Tratamiento creado con ID:', docRef.id);
+            
+            res.writeHead(201, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ 
+              message: 'Tratamiento creado exitosamente', 
+              id: docRef.id,
+              data: tratamiento
+            }));
+            return;
+          }
+        }
+        
+        console.log('DEBUG: Firebase no disponible');
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ message: 'Firebase no disponible' }));
+      } catch (error) {
+        console.log('DEBUG: Error al crear tratamiento:', error.message);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ message: 'Error al crear tratamiento', error: error.message }));
+      }
+    });
+    return;
+  }
+
+  // Actualizar tratamiento
+  if (method === 'PUT' && path.startsWith('/api/citas/tratamientos/')) {
+    const tratamientoId = path.split('/').pop();
+    let body = '';
+    req.on('data', chunk => {
+      body += chunk.toString();
+    });
+    req.on('end', async () => {
+      try {
+        const data = JSON.parse(body);
+        console.log('DEBUG: Actualizando tratamiento:', tratamientoId, data);
+        
+        if (db && isFirebaseWorking) {
+          const firebaseWorks = await isFirebaseWorking();
+          if (firebaseWorks) {
+            const docRef = db.collection('tratamientos').doc(tratamientoId);
+            await docRef.update({
+              ...data,
+              actualizadoEn: new Date()
+            });
+            console.log('DEBUG: Tratamiento actualizado');
+            
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ message: 'Tratamiento actualizado exitosamente' }));
+            return;
+          }
+        }
+        
+        console.log('DEBUG: Firebase no disponible');
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ message: 'Firebase no disponible' }));
+      } catch (error) {
+        console.log('DEBUG: Error al actualizar tratamiento:', error.message);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ message: 'Error al actualizar tratamiento', error: error.message }));
+      }
+    });
+    return;
+  }
+
+  // Eliminar tratamiento
+  if (method === 'DELETE' && path.startsWith('/api/citas/tratamientos/')) {
+    const tratamientoId = path.split('/').pop();
+    const handleDeleteTratamiento = async () => {
+      try {
+        console.log('DEBUG: Eliminando tratamiento:', tratamientoId);
+        
+        if (db && isFirebaseWorking) {
+          const firebaseWorks = await isFirebaseWorking();
+          if (firebaseWorks) {
+            await db.collection('tratamientos').doc(tratamientoId).delete();
+            console.log('DEBUG: Tratamiento eliminado');
+            
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ message: 'Tratamiento eliminado exitosamente' }));
+            return;
+          }
+        }
+        
+        console.log('DEBUG: Firebase no disponible');
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ message: 'Firebase no disponible' }));
+      } catch (error) {
+        console.log('DEBUG: Error al eliminar tratamiento:', error.message);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ message: 'Error al eliminar tratamiento', error: error.message }));
+      }
+    };
+    
+    handleDeleteTratamiento();
+    return;
+  }
+
   // Test endpoint con diagnóstico completo
   if (method === 'GET' && path === '/api/test') {
     const handleTest = async () => {
