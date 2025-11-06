@@ -1,6 +1,8 @@
 const http = require('http');
 const url = require('url');
 const querystring = require('querystring');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 
 // Importar Firebase
 let db = null;
@@ -157,6 +159,96 @@ const server = http.createServer((req, res) => {
     };
     
     handleGetBlogs();
+    return;
+  }
+
+  // 🔐 Ruta de login de administrador
+  if (method === 'POST' && path === '/api/login') {
+    let body = '';
+    req.on('data', chunk => {
+      body += chunk.toString();
+    });
+    req.on('end', async () => {
+      try {
+        const origin = req.headers.origin;
+        const { username, contrasena } = JSON.parse(body);
+        console.log('Intentando login:', { username });
+
+        const snapshot = await db.collection('administradores').where('username', '==', username).get();
+        console.log('Snapshot obtenido:', snapshot);
+        
+        if (snapshot.empty) {
+          console.log('Usuario no encontrado');
+          res.setHeader('Access-Control-Allow-Origin', origin);
+          res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+          res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
+          res.setHeader('Access-Control-Allow-Credentials', 'true');
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ message: 'Usuario no encontrado' }));
+          return;
+        }
+
+        let adminData;
+        snapshot.forEach(doc => {
+          adminData = doc.data();
+        });
+        console.log('Datos de admin:', adminData);
+
+        if (!adminData || !adminData.contrasena) {
+          console.log('Datos de administrador incompletos');
+          res.setHeader('Access-Control-Allow-Origin', origin);
+          res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+          res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
+          res.setHeader('Access-Control-Allow-Credentials', 'true');
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ message: 'Datos de administrador incompletos' }));
+          return;
+        }
+
+        // ✅ Compara contraseñas con bcryptjs
+        const isMatch = await bcrypt.compare(contrasena, adminData.contrasena);
+        console.log('¿Contraseña coincide?', isMatch);
+        
+        if (!isMatch) {
+          console.log('Contraseña incorrecta');
+          res.setHeader('Access-Control-Allow-Origin', origin);
+          res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+          res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
+          res.setHeader('Access-Control-Allow-Credentials', 'true');
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ message: 'Contraseña incorrecta' }));
+          return;
+        }
+
+        // 🔑 Generar token JWT
+        const token = jwt.sign(
+          { username: adminData.username },
+          'mi_clave_secreta', // ⚠️ Usar variable de entorno en producción
+          { expiresIn: '1h' }
+        );
+        console.log('Token generado:', token);
+
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          message: 'Login exitoso',
+          user: { username: adminData.username },
+          token
+        }));
+
+      } catch (error) {
+        console.error('Error en login:', error);
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ message: 'Error en el servidor', error: error.message }));
+      }
+    });
     return;
   }
 
