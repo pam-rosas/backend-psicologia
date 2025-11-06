@@ -26,10 +26,12 @@ let blogs = [
 ];
 
 const server = http.createServer((req, res) => {
-  // CORS headers - Permitir tu dominio de producción
+  // CORS headers
   const allowedOrigins = [
     'http://localhost:4200',
-    'https://emhpsicoterapia.cl'
+    'https://emhpsicoterapia.cl',
+    'https://www.emhpsicoterapia.cl',
+    'https://psicoterapia-frontend.onrender.com'
   ];
   
   const origin = req.headers.origin;
@@ -37,7 +39,7 @@ const server = http.createServer((req, res) => {
     res.setHeader('Access-Control-Allow-Origin', origin);
   }
   
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   
