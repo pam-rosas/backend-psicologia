@@ -192,9 +192,9 @@ const server = http.createServer((req, res) => {
     req.on('end', async () => {
       try {
         const data = JSON.parse(body);
-        console.log('🎓 Creando taller:', data);
+        console.log('Creando taller:', data);
         
-        if (!data.subtitulo || !data.fechaInicio || !data.valor || !data.facilitador || !data.descripcionDeServicio || !data.proximasSesiones || data.proximasSesiones.length === 0 || !data.politicaDeCancelacion || !data.datosDeContacto) {
+        if (!data.subtitulo || !data.fechaInicio || !data.valor || !data.facilitador || !data.descripcionDeServicio || !data.descripcionDeServicio.texto || !data.proximasSesiones || data.proximasSesiones.length === 0 || !data.politicaDeCancelacion || !data.politicaDeCancelacion.texto || !data.datosDeContacto || !data.datosDeContacto.texto) {
           return sendJSON(res, 400, { message: 'Datos incompletos.' }, validOrigin);
         }
 
@@ -290,9 +290,9 @@ const server = http.createServer((req, res) => {
     req.on('end', async () => {
       try {
         const data = JSON.parse(body);
-        console.log('✏️ Editando taller:', tallerId);
+        console.log('Editando taller:', tallerId);
         
-        if (!data.subtitulo || !data.fechaInicio || !data.valor || !data.facilitador || !data.descripcionDeServicio || !data.proximasSesiones || data.proximasSesiones.length === 0 || !data.politicaDeCancelacion || !data.datosDeContacto) {
+        if (!data.subtitulo || !data.fechaInicio || !data.valor || !data.facilitador || !data.descripcionDeServicio || !data.descripcionDeServicio.texto || !data.proximasSesiones || data.proximasSesiones.length === 0 || !data.politicaDeCancelacion || !data.politicaDeCancelacion.texto || !data.datosDeContacto || !data.datosDeContacto.texto) {
           return sendJSON(res, 400, { message: 'Datos incompletos para la edición.' }, validOrigin);
         }
 
