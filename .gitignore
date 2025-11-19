@@ -3,3 +3,4 @@ node_modules/
 firebase/key.json.json
 *.log
 .DS_Store
+*.md

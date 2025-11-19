@@ -15,9 +15,9 @@ const verifyToken = (req, res, next) => {
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'tu_jwt_secret');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'mi_clave_secreta');
     req.user = decoded;
-    console.log('[AUTH] Token valid for user:', decoded.email);
+    console.log('[AUTH] Token valid for user:', decoded.username, 'Role:', decoded.role);
     next();
   } catch (error) {
     console.log('[AUTH] Invalid token:', error.message);
@@ -28,4 +28,28 @@ const verifyToken = (req, res, next) => {
   }
 };
 
-module.exports = verifyToken;
+// Middleware para verificar roles específicos
+const verifyRole = (...allowedRoles) => {
+  return (req, res, next) => {
+    if (!req.user || !req.user.role) {
+      console.log('[AUTH] No role found in token');
+      return res.status(403).json({ 
+        success: false, 
+        error: 'Acceso denegado: rol no especificado' 
+      });
+    }
+
+    if (!allowedRoles.includes(req.user.role)) {
+      console.log('[AUTH] User role not authorized:', req.user.role);
+      return res.status(403).json({ 
+        success: false, 
+        error: 'Acceso denegado: permisos insuficientes' 
+      });
+    }
+
+    console.log('[AUTH] Role authorized:', req.user.role);
+    next();
+  };
+};
+
+module.exports = { verifyToken, verifyRole };

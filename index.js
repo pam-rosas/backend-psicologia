@@ -1,10 +1,10 @@
 // index.js - Production entry point
-// Uses pure-server.js to avoid path-to-regexp issues with Express
+// Uses index-supabase.js with Supabase PostgreSQL
 
 require('dotenv').config();
 
 console.log('🚀 Iniciando servidor para producción...');
-console.log('📝 Usando pure-server.js (HTTP nativo) para evitar errores de Express/path-to-regexp');
+console.log('🗄️  Usando Supabase PostgreSQL - Firebase completamente eliminado');
 
-// Cargar el servidor puro que ya funciona perfectamente
-require('./pure-server.js');
+// Cargar el servidor con Supabase
+require('./index-supabase.js');

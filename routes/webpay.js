@@ -139,13 +139,44 @@ router.post('/commit', async (req, res) => {
 
     console.log('Respuesta de confirmación exitosa:', commitResponse);
 
-    // Aquí puedes actualizar el estado de la cita en la base de datos
+    // Actualizar estado de la cita en Supabase
     if (commitResponse.responseCode === 0) {
       console.log('✅ Pago aprobado para orden:', commitResponse.buyOrder);
-      // TODO: Actualizar estado de la cita en Firestore
+      
+      // Actualizar estado de la cita a 'confirmed' y marcar como pagada
+      const { supabase } = require('../db/supabase');
+      const { error: updateError } = await supabase
+        .from('appointments')
+        .update({ 
+          status: 'confirmed',
+          payment_status: 'paid',
+          payment_reference: commitResponse.buyOrder,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', commitResponse.sessionId);
+      
+      if (updateError) {
+        console.error('❌ Error actualizando estado de cita:', updateError);
+      } else {
+        console.log('✅ Estado de cita actualizado exitosamente');
+      }
     } else {
       console.log('❌ Pago rechazado para orden:', commitResponse.buyOrder, 'Código:', commitResponse.responseCode);
-      // TODO: Actualizar estado de la cita como pago fallido
+      
+      // Actualizar estado como pago fallido
+      const { supabase } = require('../db/supabase');
+      const { error: updateError } = await supabase
+        .from('appointments')
+        .update({ 
+          payment_status: 'failed',
+          payment_reference: commitResponse.buyOrder,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', commitResponse.sessionId);
+      
+      if (updateError) {
+        console.error('❌ Error actualizando estado de pago fallido:', updateError);
+      }
     }
 
     res.status(200).json({
