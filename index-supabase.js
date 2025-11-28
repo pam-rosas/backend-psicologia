@@ -12,7 +12,8 @@ const { verifyToken, verifyRole } = require('./middlewares/verifyToken');
 
 // Importar rutas Supabase (migradas)
 const loginRoutes = require('./routes/login-supabase');
-const blogRoutes = require('./routes/blog-supabase');
+// const blogRoutes = require('./routes/blog-supabase'); // DEPRECATED - Usar nueva arquitectura
+const blogRoutesNew = require('./src/modules/blog/blog.routes'); // ✅ NUEVA ARQUITECTURA
 const citasRoutes = require('./routes/citas-supabase');
 const tallerRoutes = require('./routes/talleres-supabase');
 const horarioRoutes = require('./routes/horarios-supabase');
@@ -73,8 +74,8 @@ app.use((req, res, next) => {
 // Autenticación
 app.use('/api/login', loginRoutes);
 
-// Blog
-app.use('/api/blog', blogRoutes);
+// Blog - Nueva arquitectura limpia
+app.use('/api/blogs', blogRoutesNew); // ✅ REST estándar: /api/blogs
 
 // Citas y tratamientos
 app.use('/api/citas', citasRoutes);
