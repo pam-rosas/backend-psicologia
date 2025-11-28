@@ -22,6 +22,16 @@ const pageContentRoutes = require('./routes/page-content-supabase');
 const mediaRoutes = require('./routes/media-supabase');
 const imagesRoutes = require('./routes/images-supabase');
 const webpayRoutes = require('./routes/webpay');
+const paquetesRoutes = require('./routes/paquetes-supabase');
+
+const disponibilidadRoutes = require('./routes/disponibilidad-supabase');
+const configuracionDisponibilidadRoutes = require('./routes/configuracion-disponibilidad');
+
+// Rutas de administración
+const adminHorariosRoutes = require('./routes/admin-horarios');
+const bloquesManualesRoutes = require('./routes/bloques-manuales');
+const reservasRoutes = require('./routes/reservas-supabase');
+const adminCitasRoutes = require('./routes/admin-citas');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -90,6 +100,26 @@ app.use('/api/images', imagesRoutes);
 
 // Webpay (Integración de pago con Supabase)
 app.use('/api/webpay', webpayRoutes);
+
+// Paquetes (Nuevo sistema de agendamiento)
+app.use('/api', paquetesRoutes);
+
+// Disponibilidad de horarios (Nuevo sistema de agendamiento)
+
+app.use('/api', disponibilidadRoutes);
+app.use('/api/configuracion/disponibilidad', configuracionDisponibilidadRoutes);
+
+// Panel de administración de horarios y excepciones
+app.use('/api/admin', adminHorariosRoutes);
+
+// Bloques manuales para gestión de calendario
+app.use('/api/bloques-manuales', bloquesManualesRoutes);
+
+// Reservas con paquetes (múltiples sesiones)
+app.use('/api/reservas', reservasRoutes);
+
+// Administración de citas (detalle, reagendar, cancelar)
+app.use('/api/admin/citas', adminCitasRoutes);
 
 // =====================================================
 // RUTA DE PRUEBA

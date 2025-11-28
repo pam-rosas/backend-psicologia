@@ -11,44 +11,44 @@ const { verifyToken } = require('../middlewares/verifyToken');
 router.get('/', async (req, res) => {
   try {
     // Obtener horarios semanales
-    const { data: schedules, error: schedError } = await supabase
-      .from('schedules')
+    const { data: horarios, error: horariosError } = await supabase
+      .from('horarios_disponibles')
       .select('*')
-      .eq('is_active', true)
-      .order('day_of_week');
-
-    if (schedError) throw schedError;
+      .eq('activo', true)
+      .order('dia_semana');
+    if (horariosError) throw horariosError;
 
     // Obtener excepciones (solo futuras o de hoy)
     const today = new Date().toISOString().split('T')[0];
-    const { data: exceptions, error: excError } = await supabase
-      .from('schedule_exceptions')
+    const { data: excepciones, error: excError } = await supabase
+      .from('excepciones_horarios')
       .select('*')
-      .gte('exception_date', today)
-      .order('exception_date');
-
+      .gte('fecha', today)
+      .order('fecha');
     if (excError) throw excError;
 
-    // Formatear respuesta al estilo del sistema antiguo
+    // Formatear respuesta
     const horarioSemanal = {};
     const diasMap = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
-    
-    schedules.forEach(schedule => {
-      const dia = diasMap[schedule.day_of_week];
+    horarios.forEach(horario => {
+      const dia = diasMap[horario.dia_semana];
       if (!horarioSemanal[dia]) {
         horarioSemanal[dia] = [];
       }
       horarioSemanal[dia].push({
-        inicio: schedule.start_time,
-        fin: schedule.end_time
+        inicio: horario.hora_inicio,
+        fin: horario.hora_fin,
+        modalidad: horario.modalidad
       });
     });
 
     const excepcionesMap = {};
-    exceptions.forEach(exc => {
-      excepcionesMap[exc.exception_date] = [{
-        inicio: exc.start_time,
-        fin: exc.end_time
+    excepciones.forEach(exc => {
+      excepcionesMap[exc.fecha] = [{
+        inicio: exc.hora_inicio,
+        fin: exc.hora_fin,
+        motivo: exc.motivo,
+        bloqueado: exc.bloqueado
       }];
     });
 
@@ -94,39 +94,38 @@ router.post('/semanal', verifyToken, async (req, res) => {
 
     // Eliminar TODOS los horarios existentes para evitar duplicados
     await supabase
-      .from('schedules')
+      .from('horarios_disponibles')
       .delete()
       .neq('id', '00000000-0000-0000-0000-000000000000'); // Eliminar todos
 
     // Insertar nuevos horarios
-    const schedulesToInsert = [];
+    const horariosToInsert = [];
     Object.entries(horarioSemanal).forEach(([dia, rangos]) => {
       const dayNumber = diasMap[dia];
       if (dayNumber === undefined) return;
-
       rangos.forEach(rango => {
         if (rango.inicio && rango.fin) {
-          schedulesToInsert.push({
-            day_of_week: dayNumber,
-            start_time: rango.inicio,
-            end_time: rango.fin,
-            is_active: true
+          horariosToInsert.push({
+            dia_semana: dayNumber,
+            hora_inicio: rango.inicio,
+            hora_fin: rango.fin,
+            modalidad: rango.modalidad || 'ambas',
+            activo: true
           });
         }
       });
     });
 
-    if (schedulesToInsert.length > 0) {
+    if (horariosToInsert.length > 0) {
       const { error } = await supabase
-        .from('schedules')
-        .insert(schedulesToInsert);
-
+        .from('horarios_disponibles')
+        .insert(horariosToInsert);
       if (error) throw error;
     }
 
     res.status(200).json({ 
       message: 'Horario semanal actualizado exitosamente',
-      count: schedulesToInsert.length
+      count: horariosToInsert.length
     });
   } catch (error) {
     console.error('Error al guardar horario:', error);
@@ -148,27 +147,20 @@ router.post('/excepcion', verifyToken, async (req, res) => {
       return res.status(403).json({ message: 'Acceso denegado' });
     }
 
-    const { fecha, horaInicio, horaFin, disponible, razon } = req.body;
+    const { fecha, hora_inicio, hora_fin, motivo, bloqueado } = req.body;
 
     if (!fecha) {
       return res.status(400).json({ message: 'fecha es requerida' });
     }
 
-    // Si disponible es false, es un día bloqueado (sin hora inicio/fin)
-    // Si disponible es true, debe tener hora inicio y fin
-    if (disponible && (!horaInicio || !horaFin)) {
-      return res.status(400).json({ 
-        message: 'horaInicio y horaFin son requeridos cuando disponible=true' 
-      });
-    }
-
     const { data: excepcion, error } = await supabase
-      .from('schedule_exceptions')
+      .from('excepciones_horarios')
       .insert([{
-        exception_date: fecha,
-        start_time: horaInicio || null,
-        end_time: horaFin || null,
-        reason: razon || null
+        fecha,
+        hora_inicio: hora_inicio || null,
+        hora_fin: hora_fin || null,
+        motivo: motivo || null,
+        bloqueado: bloqueado === undefined ? false : bloqueado
       }])
       .select()
       .single();
@@ -202,9 +194,9 @@ router.delete('/excepcion/:fecha', verifyToken, async (req, res) => {
     const { fecha } = req.params;
 
     const { data: excepcion, error } = await supabase
-      .from('schedule_exceptions')
+      .from('excepciones_horarios')
       .delete()
-      .eq('exception_date', fecha)
+      .eq('fecha', fecha)
       .select()
       .single();
 
@@ -236,38 +228,31 @@ router.get('/disponibles/:fecha', async (req, res) => {
     const dayOfWeek = date.getDay();
 
     // Verificar si hay excepción para este día
-    const { data: exception, error: excError } = await supabase
-      .from('schedule_exceptions')
+    const { data: excepciones, error: excError } = await supabase
+      .from('excepciones_horarios')
       .select('*')
-      .eq('exception_date', fecha)
-      .maybeSingle();
-
+      .eq('fecha', fecha);
     if (excError) throw excError;
 
     let availableSlots = [];
-
-    if (exception) {
-      // Usar horario de excepción
-      if (exception.start_time && exception.end_time) {
-        availableSlots.push({
-          inicio: exception.start_time,
-          fin: exception.end_time
-        });
-      }
-    } else {
+    const excepcion = excepciones && excepciones.length > 0 ? excepciones[0] : null;
+    if (excepcion && excepcion.hora_inicio && excepcion.hora_fin && !excepcion.bloqueado) {
+      availableSlots.push({
+        inicio: excepcion.hora_inicio,
+        fin: excepcion.hora_fin
+      });
+    } else if (!excepcion || !excepcion.bloqueado) {
       // Usar horario semanal normal
-      const { data: schedules, error: schedError } = await supabase
-        .from('schedules')
+      const { data: horarios, error: horariosError } = await supabase
+        .from('horarios_disponibles')
         .select('*')
-        .eq('day_of_week', dayOfWeek)
-        .eq('is_active', true)
-        .order('start_time');
-
-      if (schedError) throw schedError;
-
-      availableSlots = schedules.map(s => ({
-        inicio: s.start_time,
-        fin: s.end_time
+        .eq('dia_semana', dayOfWeek)
+        .eq('activo', true)
+        .order('hora_inicio');
+      if (horariosError) throw horariosError;
+      availableSlots = horarios.map(h => ({
+        inicio: h.hora_inicio,
+        fin: h.hora_fin
       }));
     }
 

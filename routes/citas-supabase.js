@@ -89,6 +89,62 @@ async function enviarCorreoConfirmacion(cita, tratamiento, patient) {
 }
 
 /**
+ * @route   GET /api/citas
+ * @desc    Listar citas con filtros opcionales
+ * @access  Admin (requiere token)
+ */
+router.get('/', verifyToken, async (req, res) => {
+  try {
+    const { fecha_inicio, fecha_fin, estado } = req.query;
+
+    let query = supabase
+      .from('citas')
+      .select(`
+        *,
+        patients!citas_rut_paciente_fkey (
+          rut,
+          full_name,
+          email,
+          phone
+        )
+      `)
+      .order('fecha', { ascending: true })
+      .order('hora', { ascending: true });
+
+    // Filtros opcionales
+    if (fecha_inicio) {
+      query = query.gte('fecha', fecha_inicio);
+    }
+    if (fecha_fin) {
+      query = query.lte('fecha', fecha_fin);
+    }
+    if (estado) {
+      query = query.eq('estado', estado);
+    }
+
+    const { data: citasRaw, error } = await query;
+
+    if (error) throw error;
+
+    // Mapear a formato esperado por frontend (con nombre_paciente, etc.)
+    const citas = (citasRaw || []).map(cita => ({
+      ...cita,
+      nombre_paciente: cita.patients?.full_name || 'Sin nombre',
+      email_paciente: cita.patients?.email || '',
+      telefono_paciente: cita.patients?.phone || ''
+    }));
+
+    res.json(citas);
+  } catch (error) {
+    console.error('Error al obtener citas:', error);
+    res.status(500).json({ 
+      message: 'Error al obtener citas', 
+      error: error.message 
+    });
+  }
+});
+
+/**
  * @route   GET /api/citas/horarios-disponibles
  * @desc    Obtener horarios disponibles para una fecha específica
  * @access  Public
@@ -831,6 +887,311 @@ router.get('/estadisticas/resumen', verifyToken, async (req, res) => {
     res.status(500).json({ 
       message: 'Error al obtener estadísticas', 
       error: error.message 
+    });
+  }
+});
+
+/**
+ * @route   POST /api/citas/reservar-con-paquete
+ * @desc    Crear nueva cita con el nuevo sistema de paquetes
+ * @access  Public
+ */
+router.post('/reservar-con-paquete', async (req, res) => {
+  try {
+    const {
+      paqueteId,
+      fecha,
+      horaInicio,
+      horaFin,
+      rutPaciente,
+      nombrePaciente,
+      emailPaciente,
+      telefonoPaciente,
+      notas,
+      direccion,
+      comuna,
+      modalidad,
+      metodoPago,
+      monto
+    } = req.body;
+
+    // ===== VALIDACIONES =====
+    // Campos obligatorios
+    if (!paqueteId || !fecha || !horaInicio || !horaFin || !rutPaciente || 
+        !nombrePaciente || !emailPaciente || !telefonoPaciente) {
+      return res.status(400).json({
+        success: false,
+        message: 'Faltan campos requeridos: paqueteId, fecha, horaInicio, horaFin, rutPaciente, nombrePaciente, emailPaciente, telefonoPaciente'
+      });
+    }
+
+    // Validar email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(emailPaciente)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email inválido'
+      });
+    }
+
+    // Validar RUT
+    if (!validarRUT(rutPaciente)) {
+      return res.status(400).json({
+        success: false,
+        message: 'RUT inválido'
+      });
+    }
+
+    // Validar teléfono chileno (+56XXXXXXXXX)
+    const telefonoRegex = /^\+56\d{9}$/;
+    if (!telefonoRegex.test(telefonoPaciente)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Teléfono inválido. Formato esperado: +56912345678'
+      });
+    }
+
+    // ===== 1. VERIFICAR PAQUETE =====
+    const { data: paquete, error: paqueteError } = await supabase
+      .from('paquetes')
+      .select('*')
+      .eq('id', paqueteId)
+      .eq('activo', true)
+      .single();
+
+    if (paqueteError || !paquete) {
+      return res.status(404).json({
+        success: false,
+        message: 'Paquete no encontrado o inactivo'
+      });
+    }
+
+    // ===== 2. VERIFICAR DISPONIBILIDAD =====
+    // Verificar que no haya citas en ese horario
+    const appointmentDateTime = `${fecha}T${horaInicio}:00`;
+    
+    const { data: citasExistentes, error: citasError } = await supabase
+      .from('citas')
+      .select('id, hora, duracion')
+      .eq('fecha', fecha)
+      .neq('estado', 'cancelada');
+
+    if (citasError) throw citasError;
+
+    // Verificar solapamiento
+    const [horaInicioH, horaInicioM] = horaInicio.split(':').map(Number);
+    const [horaFinH, horaFinM] = horaFin.split(':').map(Number);
+    const inicioMinutos = horaInicioH * 60 + horaInicioM;
+    const finMinutos = horaFinH * 60 + horaFinM;
+
+    for (const cita of citasExistentes) {
+      const citaHora = cita.hora.substring(0, 5);
+      const [citaH, citaM] = citaHora.split(':').map(Number);
+      const citaInicio = citaH * 60 + citaM;
+      const citaFin = citaInicio + (cita.duracion || 60);
+
+      // Verificar solapamiento
+      if (inicioMinutos < citaFin && finMinutos > citaInicio) {
+        return res.status(409).json({
+          success: false,
+          message: 'El horario ya no está disponible. Por favor selecciona otro.'
+        });
+      }
+    }
+
+    // ===== 3. BUSCAR O CREAR PACIENTE =====
+    let pacienteId;
+
+    // Buscar por RUT
+    const { data: pacienteExistente } = await supabase
+      .from('patients')
+      .select('id')
+      .eq('rut', rutPaciente)
+      .is('deleted_at', null)
+      .maybeSingle();
+
+    if (pacienteExistente) {
+      pacienteId = pacienteExistente.id;
+
+      // Actualizar datos del paciente
+      const updateData = {
+        full_name: nombrePaciente,
+        email: emailPaciente,
+        phone: telefonoPaciente,
+        updated_at: new Date().toISOString()
+      };
+
+      // Agregar campos opcionales si están presentes
+      if (direccion) updateData.address = direccion;
+      if (comuna) updateData.city = comuna;
+      if (notas) updateData.medical_notes = notas;
+
+      await supabase
+        .from('patients')
+        .update(updateData)
+        .eq('id', pacienteId);
+    } else {
+      // Crear nuevo paciente
+      const nuevoPacienteData = {
+        full_name: nombrePaciente,
+        email: emailPaciente,
+        rut: rutPaciente,
+        phone: telefonoPaciente
+      };
+
+      // Agregar campos opcionales si están presentes
+      if (direccion) nuevoPacienteData.address = direccion;
+      if (comuna) nuevoPacienteData.city = comuna;
+      if (notas) nuevoPacienteData.medical_notes = notas;
+
+      const { data: nuevoPaciente, error: pacienteError } = await supabase
+        .from('patients')
+        .insert(nuevoPacienteData)
+        .select('id')
+        .single();
+
+      if (pacienteError) throw pacienteError;
+      pacienteId = nuevoPaciente.id;
+    }
+
+    // ===== 4. CREAR CITA =====
+    const duracionMinutos = finMinutos - inicioMinutos;
+
+    // Construir notas de la cita
+    let notasCita = `Reserva con paquete: ${paquete.nombre}`;
+    if (notas) {
+      notasCita += `\nNotas del paciente: ${notas}`;
+    }
+    if (direccion || comuna) {
+      notasCita += `\nUbicación: ${direccion || ''}${direccion && comuna ? ', ' : ''}${comuna || ''}`;
+    }
+
+    const { data: nuevaCita, error: citaError } = await supabase
+      .from('citas')
+      .insert({
+        nombre: nombrePaciente,
+        correo: emailPaciente,
+        telefono: telefonoPaciente,
+        tratamiento: paquete.nombre,
+        fecha: fecha,
+        hora: horaInicio,
+        notas: notasCita,
+        estado: 'confirmada',
+        paquete_id: paqueteId,
+        modalidad: modalidad || paquete.modalidad,
+        duracion: duracionMinutos,
+        rut_paciente: rutPaciente,
+        patient_id: pacienteId
+      })
+      .select()
+      .single();
+
+    if (citaError) throw citaError;
+
+    // ===== 5. ENVIAR CORREOS =====
+    // Correo al paciente
+    const mailOptionsPaciente = {
+      from: process.env.EMAIL_USER || 'eduardo@emhpsicoterapia.cl',
+      to: emailPaciente,
+      subject: `Confirmación de Cita - ${paquete.nombre}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #4CAF50;">¡Cita Confirmada!</h2>
+          <p>Hola ${nombrePaciente},</p>
+          <p>Tu cita ha sido confirmada exitosamente:</p>
+          <div style="background-color: #f5f5f5; padding: 20px; border-radius: 10px; margin: 20px 0;">
+            <ul style="list-style: none; padding: 0;">
+              <li style="margin: 10px 0;"><strong>📦 Paquete:</strong> ${paquete.nombre}</li>
+              <li style="margin: 10px 0;"><strong>📅 Fecha:</strong> ${new Date(fecha).toLocaleDateString('es-CL', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</li>
+              <li style="margin: 10px 0;"><strong>⏰ Horario:</strong> ${horaInicio} - ${horaFin}</li>
+              <li style="margin: 10px 0;"><strong>⏱️ Duración:</strong> ${duracionMinutos} minutos</li>
+              <li style="margin: 10px 0;"><strong>📍 Modalidad:</strong> ${modalidad || paquete.modalidad}</li>
+              <li style="margin: 10px 0;"><strong>💰 Precio:</strong> $${paquete.precio_nacional.toLocaleString('es-CL')} CLP</li>
+              ${direccion || comuna ? `<li style="margin: 10px 0;"><strong>📍 Ubicación:</strong> ${direccion || ''}${direccion && comuna ? ', ' : ''}${comuna || ''}</li>` : ''}
+            </ul>
+          </div>
+          ${notas ? `<div style="background-color: #fff3cd; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #ffc107;">
+            <strong>📝 Notas:</strong><br>
+            <p style="margin: 5px 0;">${notas}</p>
+          </div>` : ''}
+          <p>Si necesitas cancelar o reprogramar, contáctanos con al menos 24 horas de anticipación.</p>
+          <p style="color: #666; font-size: 14px;">WhatsApp: <a href="https://wa.me/56994739587">+56 9 9473 9587</a></p>
+          <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+          <p style="color: #999; font-size: 12px;">EMH Psicoterapia Online<br>eduardo@emhpsicoterapia.cl</p>
+        </div>
+      `
+    };
+
+    // Correo al psicólogo
+    const mailOptionsPsicologo = {
+      from: process.env.EMAIL_USER || 'eduardo@emhpsicoterapia.cl',
+      to: process.env.EMAIL_USER || 'eduardo@emhpsicoterapia.cl',
+      subject: `Nueva Reserva - ${paquete.nombre}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #2196F3;">Nueva Reserva Recibida</h2>
+          <div style="background-color: #f5f5f5; padding: 20px; border-radius: 10px; margin: 20px 0;">
+            <h3>Datos del Paciente:</h3>
+            <ul style="list-style: none; padding: 0;">
+              <li style="margin: 10px 0;"><strong>Nombre:</strong> ${nombrePaciente}</li>
+              <li style="margin: 10px 0;"><strong>RUT:</strong> ${rutPaciente}</li>
+              <li style="margin: 10px 0;"><strong>Email:</strong> ${emailPaciente}</li>
+              <li style="margin: 10px 0;"><strong>Teléfono:</strong> ${telefonoPaciente}</li>
+              ${direccion || comuna ? `<li style="margin: 10px 0;"><strong>Ubicación:</strong> ${direccion || ''}${direccion && comuna ? ', ' : ''}${comuna || ''}</li>` : ''}
+            </ul>
+            <hr>
+            <h3>Datos de la Cita:</h3>
+            <ul style="list-style: none; padding: 0;">
+              <li style="margin: 10px 0;"><strong>📦 Paquete:</strong> ${paquete.nombre}</li>
+              <li style="margin: 10px 0;"><strong>📅 Fecha:</strong> ${new Date(fecha).toLocaleDateString('es-CL', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</li>
+              <li style="margin: 10px 0;"><strong>⏰ Horario:</strong> ${horaInicio} - ${horaFin}</li>
+              <li style="margin: 10px 0;"><strong>⏱️ Duración:</strong> ${duracionMinutos} minutos</li>
+              <li style="margin: 10px 0;"><strong>📍 Modalidad:</strong> ${modalidad || paquete.modalidad}</li>
+              <li style="margin: 10px 0;"><strong>💰 Precio:</strong> $${paquete.precio_nacional.toLocaleString('es-CL')} CLP</li>
+              ${metodoPago ? `<li style="margin: 10px 0;"><strong>💳 Método de pago:</strong> ${metodoPago}</li>` : ''}
+            </ul>
+            ${notas ? `<div style="background-color: #fff3cd; padding: 15px; border-radius: 8px; margin-top: 15px; border-left: 4px solid #ffc107;">
+              <strong>📝 Notas del paciente:</strong><br>
+              <p style="margin: 5px 0;">${notas}</p>
+            </div>` : ''}
+          </div>
+        </div>
+      `
+    };
+
+    // Enviar correos
+    try {
+      await Promise.all([
+        transporter.sendMail(mailOptionsPaciente),
+        transporter.sendMail(mailOptionsPsicologo)
+      ]);
+      console.log('✉️ Correos de confirmación enviados');
+    } catch (emailError) {
+      console.error('❌ Error al enviar correos:', emailError);
+      // No fallar la reserva si hay error en el correo
+    }
+
+    // ===== 6. RESPUESTA EXITOSA =====
+    res.status(201).json({
+      success: true,
+      message: 'Cita reservada exitosamente',
+      cita: {
+        id: nuevaCita.id,
+        paquete: paquete.nombre,
+        fecha,
+        horario: `${horaInicio} - ${horaFin}`,
+        modalidad: modalidad || paquete.modalidad,
+        duracion: duracionMinutos,
+        precio: paquete.precio_nacional
+      }
+    });
+
+  } catch (error) {
+    console.error('Error al reservar cita:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al reservar cita',
+      error: error.message
     });
   }
 });
