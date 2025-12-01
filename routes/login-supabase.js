@@ -11,7 +11,39 @@ router.post('/', async (req, res) => {
   console.log('[LOGIN] Intento de login:', { username });
   
   try {
-    // Buscar usuario por username
+    // 🔑 VERIFICACIÓN DE ADMIN DESDE VARIABLES DE ENTORNO
+    // Primero verificar si es el usuario admin configurado en .env
+    const adminUsername = process.env.ADMIN_USERNAME || 'admin';
+    const adminPassword = process.env.ADMIN_PASSWORD;
+    const adminEmail = process.env.ADMIN_EMAIL || 'admin';
+    
+    if (username === adminUsername && adminPassword && contrasena === adminPassword) {
+      console.log('[LOGIN] ✅ Login exitoso como ADMIN desde variables de entorno');
+      
+      // Generar token JWT para admin
+      const token = jwt.sign(
+        { 
+          id: 'admin-env',
+          username: adminUsername,
+          role: 'admin'
+        },
+        process.env.JWT_SECRET || 'mi_clave_secreta',
+        { expiresIn: '24h' }
+      );
+      
+      return res.status(200).json({
+        message: 'Login exitoso',
+        user: { 
+          id: 'admin-env',
+          username: adminUsername,
+          role: 'admin',
+          email: adminEmail
+        },
+        token
+      });
+    }
+    
+    // Si no es admin desde env, buscar en base de datos (usuarios regulares)
     const { data: users, error } = await supabase
       .from('users')
       .select('*')
@@ -26,24 +58,24 @@ router.post('/', async (req, res) => {
     
     if (!users || users.length === 0) {
       console.log('[LOGIN] Usuario no encontrado');
-      return res.status(401).json({ message: 'Usuario no encontrado' });
+      return res.status(401).json({ message: 'Credenciales incorrectas' });
     }
     
     const user = users[0];
-    console.log('[LOGIN] Usuario encontrado:', user.username);
+    console.log('[LOGIN] Usuario encontrado en BD:', user.username);
     
     if (!user.password_hash) {
       console.log('[LOGIN] Datos de usuario incompletos');
       return res.status(500).json({ message: 'Datos de usuario incompletos' });
     }
     
-    // Verificar contraseña
+    // Verificar contraseña hasheada
     const isMatch = await bcrypt.compare(contrasena, user.password_hash);
     console.log('[LOGIN] ¿Contraseña coincide?', isMatch);
     
     if (!isMatch) {
       console.log('[LOGIN] Contraseña incorrecta');
-      return res.status(401).json({ message: 'Contraseña incorrecta' });
+      return res.status(401).json({ message: 'Credenciales incorrectas' });
     }
     
     // Generar token JWT con rol

@@ -43,7 +43,7 @@ function generarSlots(horaInicio, horaFin, duracionMinutos, incrementoMinutos = 
 }
 
 /**
- * Verifica si un horario se solapa con citas existentes o bloques manuales
+ * Verifica si un horario se solapa con citas existentes, reservas pendientes o bloques manuales
  * Ahora considera la duración completa del slot
  */
 async function verificarSolapamiento(fecha, horaInicio, horaFin) {
@@ -54,7 +54,7 @@ async function verificarSolapamiento(fecha, horaInicio, horaFin) {
   const [slotFinH, slotFinM] = horaFin.split(':').map(Number);
   const slotFinMinutos = slotFinH * 60 + slotFinM;
 
-  // 1. Verificar citas existentes
+  // 1. Verificar citas existentes (confirmadas o completadas)
   const { data: citas, error: citasError } = await supabase
     .from('citas')
     .select('hora, duracion')
@@ -78,7 +78,43 @@ async function verificarSolapamiento(fecha, horaInicio, horaFin) {
     }
   }
 
-  // 2. Verificar bloques manuales
+  // 2. Verificar reservas pendientes (PENDIENTE o PAGADA en proceso)
+  // Solo consideramos reservas de los últimos 30 minutos (tiempo límite para pagar)
+  const treintaMinutosAtras = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+  
+  const { data: reservasPendientes, error: reservasError } = await supabase
+    .from('reservas_pendientes')
+    .select('sesiones')
+    .in('estado', ['PENDIENTE', 'PAGADA'])
+    .gte('created_at', treintaMinutosAtras);
+
+  if (reservasError) throw reservasError;
+  
+  // Verificar cada sesión de las reservas pendientes
+  for (const reserva of reservasPendientes || []) {
+    const sesiones = reserva.sesiones || [];
+    
+    for (const sesion of sesiones) {
+      // Verificar que la sesión sea de la misma fecha
+      if (sesion.fecha === fecha) {
+        const reservaHoraInicio = sesion.horaInicio;
+        const reservaHoraFin = sesion.horaFin;
+        
+        const [resInicioH, resInicioM] = reservaHoraInicio.split(':').map(Number);
+        const resInicioMinutos = resInicioH * 60 + resInicioM;
+        
+        const [resFinH, resFinM] = reservaHoraFin.split(':').map(Number);
+        const resFinMinutos = resFinH * 60 + resFinM;
+        
+        // Verificar solapamiento con reserva pendiente
+        if (slotInicioMinutos < resFinMinutos && slotFinMinutos > resInicioMinutos) {
+          return true; // Hay solapamiento con reserva pendiente
+        }
+      }
+    }
+  }
+
+  // 3. Verificar bloques manuales
   const { data: bloques, error: bloquesError } = await supabase
     .from('bloques_manuales')
     .select('hora_inicio, hora_fin')
@@ -214,7 +250,23 @@ router.get('/disponibilidad/dia/:fecha/:paqueteId', async (req, res) => {
       return true;
     });
     
-    // 7. Verificar solapamiento con citas existentes
+    // 7. Filtrar horarios que ya pasaron (solo para el día de hoy)
+    const ahora = new Date();
+    const fechaConsulta = new Date(fecha + 'T00:00:00');
+    const esHoy = fechaConsulta.toDateString() === ahora.toDateString();
+    
+    if (esHoy) {
+      const horaActualMinutos = ahora.getHours() * 60 + ahora.getMinutes();
+      
+      todosLosSlots = todosLosSlots.filter(slot => {
+        const [slotH, slotM] = slot.inicio.split(':').map(Number);
+        const slotInicioMinutos = slotH * 60 + slotM;
+        // Solo mostrar slots que inicien al menos 15 minutos en el futuro
+        return slotInicioMinutos > horaActualMinutos + 15;
+      });
+    }
+    
+    // 8. Verificar solapamiento con citas existentes y reservas pendientes
     for (const slot of todosLosSlots) {
       const tieneSolapamiento = await verificarSolapamiento(fecha, slot.inicio, slot.fin);
       if (tieneSolapamiento) {
@@ -222,7 +274,7 @@ router.get('/disponibilidad/dia/:fecha/:paqueteId', async (req, res) => {
       }
     }
     
-    // 8. Filtrar solo slots disponibles
+    // 9. Filtrar solo slots disponibles
     const slotsDisponibles = todosLosSlots.filter(s => s.disponible);
     
     res.json({
