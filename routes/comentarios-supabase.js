@@ -11,16 +11,15 @@ const { verifyToken } = require('../middlewares/verifyToken');
 router.get('/', async (req, res) => {
   try {
     const { data: comentarios, error } = await supabase
-      .from('comments')
+      .from('comentarios')
       .select(`
         id,
-        name,
-        text,
+        author_name,
+        comment_text,
         rating,
         created_at
       `)
       .eq('is_approved', true)
-      .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -47,16 +46,15 @@ router.get('/admin', verifyToken, async (req, res) => {
     }
 
     const { data: comentarios, error } = await supabase
-      .from('comments')
+      .from('comentarios')
       .select(`
         id,
-        name,
-        text,
+        author_name,
+        comment_text,
         rating,
         is_approved,
         created_at
       `)
-      .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -78,27 +76,27 @@ router.get('/admin', verifyToken, async (req, res) => {
  */
 router.post('/', async (req, res) => {
   try {
-    const { nombre, texto, calificacion } = req.body;
+    const { author_name, comment_text, rating } = req.body;
 
     // Validaciones
-    if (!nombre || !texto || calificacion === undefined) {
+    if (!author_name || !comment_text || rating === undefined) {
       return res.status(400).json({ 
-        message: 'Faltan campos requeridos: nombre, texto, calificacion' 
+        message: 'Faltan campos requeridos: author_name, comment_text, rating' 
       });
     }
 
-    if (calificacion < 1 || calificacion > 5) {
+    if (rating < 1 || rating > 5) {
       return res.status(400).json({ 
         message: 'La calificación debe estar entre 1 y 5' 
       });
     }
 
     const { data: comentario, error } = await supabase
-      .from('comments')
+      .from('comentarios')
       .insert([{
-        name: nombre,
-        text: texto,
-        rating: calificacion,
+        author_name: author_name.trim(),
+        comment_text: comment_text.trim(),
+        rating: parseInt(rating),
         is_approved: false // Requiere aprobación del admin
       }])
       .select()
@@ -120,11 +118,11 @@ router.post('/', async (req, res) => {
 });
 
 /**
- * @route   PATCH /api/comentarios/:id/aprobar
+ * @route   PUT /api/comentarios/:id/approve
  * @desc    Aprobar un comentario
  * @access  Private (Admin)
  */
-router.patch('/:id/aprobar', verifyToken, async (req, res) => {
+router.put('/:id/approve', verifyToken, async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
       return res.status(403).json({ message: 'Acceso denegado' });
@@ -133,10 +131,9 @@ router.patch('/:id/aprobar', verifyToken, async (req, res) => {
     const { id } = req.params;
 
     const { data: comentario, error } = await supabase
-      .from('comments')
+      .from('comentarios')
       .update({ is_approved: true })
       .eq('id', id)
-      .is('deleted_at', null)
       .select()
       .single();
 
@@ -161,7 +158,7 @@ router.patch('/:id/aprobar', verifyToken, async (req, res) => {
 
 /**
  * @route   DELETE /api/comentarios/:id
- * @desc    Eliminar un comentario (soft delete)
+ * @desc    Eliminar un comentario permanentemente
  * @access  Private (Admin)
  */
 router.delete('/:id', verifyToken, async (req, res) => {
@@ -173,10 +170,9 @@ router.delete('/:id', verifyToken, async (req, res) => {
     const { id } = req.params;
 
     const { data: comentario, error } = await supabase
-      .from('comments')
-      .update({ deleted_at: new Date().toISOString() })
+      .from('comentarios')
+      .delete()
       .eq('id', id)
-      .is('deleted_at', null)
       .select()
       .single();
 
