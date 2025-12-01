@@ -23,12 +23,15 @@ class BlogService {
       }
 
       // Crear DTO con datos sanitizados
+      // Si el userId es 'admin-env' (admin de variables de entorno), usar null
+      const createdBy = userId === 'admin-env' ? null : userId;
+      
       const createDto = new CreateBlogDto({
         title: validation.sanitizedData.title,
         content: validation.sanitizedData.content,
         imageUrl: validation.sanitizedData.imageUrl,
         videoUrl: validation.sanitizedData.videoUrl,
-        createdBy: userId
+        createdBy: createdBy
       });
 
       // Guardar en base de datos
