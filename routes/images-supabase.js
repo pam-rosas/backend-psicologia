@@ -101,9 +101,16 @@ router.post('/blog', upload.single('imagen'), async (req, res) => {
 // =====================================================
 router.post('/upload/:folder', upload.single('imagen'), async (req, res) => {
   try {
-    console.log(`📸 Upload image to folder: ${req.params.folder}`);
+    console.log('\n🖼️  ============ UPLOAD IMAGE REQUEST ============');
+    console.log(`📸 Carpeta destino: ${req.params.folder}`);
+    console.log(`📦 Archivo recibido:`, req.file ? {
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: `${(req.file.size / 1024).toFixed(2)} KB`
+    } : 'NO HAY ARCHIVO');
     
     if (!req.file) {
+      console.error('❌ Error: No se proporcionó archivo');
       return res.status(400).json({ 
         success: false,
         error: 'No se proporcionó archivo' 
@@ -111,19 +118,28 @@ router.post('/upload/:folder', upload.single('imagen'), async (req, res) => {
     }
 
     const { folder } = req.params;
-    const allowedFolders = ['homepage', 'blog', 'servicios', 'testimonios', 'general', 'talleres'];
+    const allowedFolders = ['homepage', 'blog', 'servicios', 'testimonios', 'general', 'talleres', 'sobremi', 'inicio', 'hero'];
+    
+    console.log(`🔍 Validando carpeta "${folder}" contra permitidas:`, allowedFolders);
     
     if (!allowedFolders.includes(folder)) {
+      console.error(`❌ Carpeta "${folder}" NO PERMITIDA`);
       return res.status(400).json({ 
         success: false,
         error: 'Carpeta no permitida',
         allowedFolders 
       });
     }
+    
+    console.log(`✅ Carpeta "${folder}" es válida`);
 
     const file = req.file;
     const fileName = `${folder}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${file.mimetype.split('/')[1]}`;
     const filePath = `${folder}/${fileName}`;
+
+    console.log(`📝 Generando nombre de archivo: ${fileName}`);
+    console.log(`📂 Path completo en Storage: ${filePath}`);
+    console.log(`☁️  Subiendo a Supabase Storage bucket "images"...`);
 
     // Subir a Supabase Storage
     const { data, error } = await supabase.storage
@@ -135,7 +151,9 @@ router.post('/upload/:folder', upload.single('imagen'), async (req, res) => {
       });
 
     if (error) {
-      console.error('Error uploading to Supabase:', error);
+      console.error('❌ ERROR subiendo a Supabase Storage:');
+      console.error('   Mensaje:', error.message);
+      console.error('   Error completo:', JSON.stringify(error, null, 2));
       return res.status(500).json({ 
         success: false,
         error: 'Error al subir imagen',
@@ -143,12 +161,18 @@ router.post('/upload/:folder', upload.single('imagen'), async (req, res) => {
       });
     }
 
+    console.log(`✅ Archivo subido exitosamente a Supabase`);
+    console.log(`📦 Data de respuesta:`, data);
+
     // Obtener URL pública
+    console.log(`🔗 Generando URL pública...`);
     const { data: { publicUrl } } = supabase.storage
       .from('images')
       .getPublicUrl(filePath);
+    
+    console.log(`✅ URL pública generada: ${publicUrl}`);
 
-    res.json({
+    const responseData = {
       success: true,
       message: 'Imagen subida exitosamente',
       data: {
@@ -159,10 +183,20 @@ router.post('/upload/:folder', upload.single('imagen'), async (req, res) => {
         resource_type: 'image',
         format: file.mimetype.split('/')[1]
       }
-    });
+    };
+    
+    console.log('🎉 ÉXITO - Enviando respuesta al frontend:');
+    console.log(JSON.stringify(responseData, null, 2));
+    console.log('============ FIN UPLOAD IMAGE ============\n');
+    
+    res.json(responseData);
 
   } catch (error) {
-    console.error('Error uploading image:', error);
+    console.error('💥 EXCEPCIÓN CAPTURADA en upload image:');
+    console.error('   Mensaje:', error.message);
+    console.error('   Stack:', error.stack);
+    console.log('============ FIN UPLOAD IMAGE (ERROR) ============\n');
+    
     res.status(500).json({ 
       success: false, 
       error: 'Error interno del servidor',
@@ -186,7 +220,7 @@ router.post('/upload-video/:folder', upload.single('video'), async (req, res) =>
     }
 
     const { folder } = req.params;
-    const allowedFolders = ['homepage', 'blog', 'servicios', 'general', 'talleres'];
+    const allowedFolders = ['homepage', 'blog', 'servicios', 'general', 'talleres', 'sobremi', 'inicio', 'hero'];
     
     if (!allowedFolders.includes(folder)) {
       return res.status(400).json({ 

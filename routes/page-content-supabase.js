@@ -11,7 +11,8 @@ const { verifyToken } = require('../middlewares/verifyToken');
 router.get('/:pageId', async (req, res) => {
   try {
     const { pageId } = req.params;
-    console.log(`\n📖 [GET] Obteniendo contenido para página: ${pageId}`);
+    console.log(`\n📖 ============ GET PAGE CONTENT ============`);
+    console.log(`📄 Página solicitada: ${pageId}`);
 
     const { data: content, error } = await supabase
       .from('page_content')
@@ -24,14 +25,17 @@ router.get('/:pageId', async (req, res) => {
       throw error;
     }
 
-    console.log(`📦 Resultado de Supabase:`, content ? 'ENCONTRADO' : 'NO ENCONTRADO');
+    console.log(`📦 Resultado de Supabase:`, content ? '✅ ENCONTRADO' : '⚠️  NO ENCONTRADO');
     
     if (content) {
-      console.log(`🔍 Datos raw:`, {
+      console.log(`🔍 Datos del registro:`, {
         id: content.id,
         page_id: content.page_id,
         content_type: typeof content.content,
-        content_preview: JSON.stringify(content.content).substring(0, 100)
+        content_length: JSON.stringify(content.content).length,
+        content_preview: JSON.stringify(content.content).substring(0, 150) + '...',
+        created_at: content.created_at,
+        updated_at: content.updated_at
       });
     }
 
@@ -69,10 +73,14 @@ router.get('/:pageId', async (req, res) => {
     };
 
     if (!content) {
-      console.log(`⚠️  No hay contenido guardado, devolviendo valores por defecto`);
+      console.log(`⚠️  No hay contenido guardado en DB para "${pageId}"`);
+      console.log(`📋 Devolviendo valores por defecto...`);
       if (pageId === 'inicio') {
+        console.log(`🏠 Usando defaults de inicio`);
+        console.log('============ FIN GET PAGE CONTENT (DEFAULTS) ============\n');
         return res.json(defaultInicio);
       }
+      console.log('============ FIN GET PAGE CONTENT (EMPTY) ============\n');
       return res.json({});
     }
 
@@ -91,7 +99,12 @@ router.get('/:pageId', async (req, res) => {
       console.log(`🔀 Merged con defaults. Keys finales:`, Object.keys(finalContent));
     }
 
-    console.log(`✅ Devolviendo contenido parseado. Keys:`, Object.keys(finalContent));
+    const imageUrls = extractImageUrls(finalContent);
+    console.log(`📸 Imágenes en contenido final (${imageUrls.length}):`);
+    imageUrls.forEach(img => console.log(`   - ${img.path}: ${img.url}`));
+
+    console.log(`✅ Devolviendo contenido. Keys:`, Object.keys(finalContent));
+    console.log('============ FIN GET PAGE CONTENT ============\n');
     res.status(200).json(finalContent);
   } catch (error) {
     console.error('Error al obtener contenido de página:', error);
@@ -266,16 +279,21 @@ router.delete('/:pageId', verifyToken, async (req, res) => {
  */
 router.patch('/:pageId/batch', verifyToken, async (req, res) => {
   try {
+    console.log('\n📄 ============ PATCH BATCH PAGE CONTENT ============');
+    console.log(`👤 Usuario:`, req.user ? { id: req.user.id, role: req.user.role } : 'NO AUTH');
+    
     if (req.user.role !== 'admin') {
+      console.error('❌ Acceso denegado - Usuario no es admin');
       return res.status(403).json({ message: 'Acceso denegado' });
     }
 
     const { pageId } = req.params;
     const { updates } = req.body;
 
-    console.log(`\n💾 [PATCH BATCH] Guardando cambios para página: ${pageId}`);
-    console.log(`📝 Updates recibidos:`, updates);
-    console.log(`🔢 Cantidad de campos a actualizar:`, Object.keys(updates || {}).length);
+    console.log(`📄 Página: ${pageId}`);
+    console.log(`📝 Updates recibidos:`);
+    console.log(JSON.stringify(updates, null, 2));
+    console.log(`🔢 Cantidad de campos: ${Object.keys(updates || {}).length}`);
 
     if (!updates || Object.keys(updates).length === 0) {
       return res.status(400).json({ message: 'No hay actualizaciones para aplicar' });
@@ -305,42 +323,46 @@ router.patch('/:pageId/batch', verifyToken, async (req, res) => {
       console.log(`🔓 Contenido parseado. Keys actuales:`, Object.keys(currentContent));
     }
 
-    // Aplicar actualizaciones usando deep merge para preservar estructura anidada
-    const updatedContent = { ...currentContent };
-    for (const [contentId, value] of Object.entries(updates)) {
-      // Manejar rutas anidadas como "service-title-0" o "contact-item-1"
-      const keys = contentId.split('-');
-      
-      if (keys.length === 1) {
-        // Campo simple
-        updatedContent[contentId] = value;
-      } else {
-        // Estructura anidada - por ahora, actualización simple
-        // TODO: Implementar deep path update si es necesario
-        updatedContent[contentId] = value;
-      }
-    }
+    // Aplicar actualizaciones con deep merge para preservar estructura
+    console.log('🔀 Aplicando deep merge...');
+    console.log('   Contenido antes del merge:', JSON.stringify(currentContent).substring(0, 200) + '...');
+    const updatedContent = deepMerge(currentContent, updates);
+    console.log('   Contenido después del merge:', JSON.stringify(updatedContent).substring(0, 200) + '...');
 
-    console.log(`🔄 Contenido actualizado. Keys finales:`, Object.keys(updatedContent));
+    console.log(`✅ Merge completado. Keys finales:`, Object.keys(updatedContent));
+    const imageUrls = extractImageUrls(updatedContent);
+    console.log(`📸 URLs de imágenes encontradas (${imageUrls.length}):`);
+    imageUrls.forEach(img => console.log(`   - ${img.path}: ${img.url.substring(0, 60)}...`));
 
     if (current) {
       // Actualizar existente
-      console.log(`✏️  Actualizando registro existente con ID: ${current.id}`);
+      console.log(`✏️  Actualizando registro existente...`);
+      console.log(`   ID: ${current.id}`);
+      console.log(`   Contenido a guardar:`, JSON.stringify(updatedContent).substring(0, 300) + '...');
+      
       const { data: content, error: updateError } = await supabase
         .from('page_content')
         .update({ 
-          content: updatedContent 
+          content: updatedContent,
+          updated_at: new Date().toISOString()
         })
         .eq('id', current.id)
         .select()
         .single();
 
       if (updateError) {
-        console.error(`❌ Error al actualizar:`, updateError);
+        console.error(`❌ ERROR al actualizar en Supabase:`);
+        console.error('   Mensaje:', updateError.message);
+        console.error('   Código:', updateError.code);
+        console.error('   Detalles:', JSON.stringify(updateError, null, 2));
         throw updateError;
       }
 
-      console.log(`✅ Actualización exitosa`);
+      console.log(`✅ ACTUALIZACIÓN EXITOSA en Supabase`);
+      console.log(`   Contenido guardado:`, JSON.stringify(content.content).substring(0, 200) + '...');
+      console.log(`🎉 Respondiendo al frontend con éxito`);
+      console.log('============ FIN PATCH BATCH ============\n');
+      
       return res.status(200).json({ 
         success: true,
         message: `${Object.keys(updates).length} campos actualizados exitosamente`,
@@ -348,22 +370,33 @@ router.patch('/:pageId/batch', verifyToken, async (req, res) => {
       });
     } else {
       // Crear nuevo
-      console.log(`➕ Creando nuevo registro para página: ${pageId}`);
+      console.log(`➕ NO existe contenido previo - Creando nuevo registro...`);
+      console.log(`   Página: ${pageId}`);
+      console.log(`   Contenido inicial:`, JSON.stringify(updatedContent).substring(0, 300) + '...');
+      
       const { data: content, error: insertError } = await supabase
         .from('page_content')
         .insert([{
           page_id: pageId,
-          content: updatedContent
+          content: updatedContent,
+          created_at: new Date().toISOString()
         }])
         .select()
         .single();
 
       if (insertError) {
-        console.error(`❌ Error al crear:`, insertError);
+        console.error(`❌ ERROR al crear en Supabase:`);
+        console.error('   Mensaje:', insertError.message);
+        console.error('   Código:', insertError.code);
+        console.error('   Detalles:', JSON.stringify(insertError, null, 2));
         throw insertError;
       }
 
-      console.log(`✅ Creación exitosa con ID: ${content.id}`);
+      console.log(`✅ CREACIÓN EXITOSA en Supabase`);
+      console.log(`   ID nuevo: ${content.id}`);
+      console.log(`🎉 Respondiendo al frontend con éxito`);
+      console.log('============ FIN PATCH BATCH ============\n');
+      
       return res.status(201).json({ 
         success: true,
         message: `Contenido creado con ${Object.keys(updates).length} campos`,
@@ -371,7 +404,12 @@ router.patch('/:pageId/batch', verifyToken, async (req, res) => {
       });
     }
   } catch (error) {
-    console.error('Error en batch update:', error);
+    console.error('💥 EXCEPCIÓN CAPTURADA en batch update:');
+    console.error('   Mensaje:', error.message);
+    console.error('   Stack:', error.stack);
+    console.error('   Error completo:', JSON.stringify(error, null, 2));
+    console.log('============ FIN PATCH BATCH (ERROR) ============\n');
+    
     res.status(500).json({ 
       success: false,
       message: 'Error al actualizar contenido', 
@@ -379,6 +417,44 @@ router.patch('/:pageId/batch', verifyToken, async (req, res) => {
     });
   }
 });
+
+/**
+ * Helper: Deep merge de objetos preservando arrays y valores anidados
+ */
+function deepMerge(target, source) {
+  const output = { ...target };
+  
+  for (const key in source) {
+    if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+      // Si es objeto, hacer merge recursivo
+      output[key] = deepMerge(target[key] || {}, source[key]);
+    } else {
+      // Si es primitivo o array, reemplazar directamente
+      output[key] = source[key];
+    }
+  }
+  
+  return output;
+}
+
+/**
+ * Helper: Extraer URLs de imágenes del contenido para debugging
+ */
+function extractImageUrls(content) {
+  const urls = [];
+  const findUrls = (obj, prefix = '') => {
+    for (const [key, value] of Object.entries(obj)) {
+      const path = prefix ? `${prefix}.${key}` : key;
+      if (typeof value === 'string' && (value.includes('supabase') || value.includes('http'))) {
+        urls.push({ path, url: value });
+      } else if (value && typeof value === 'object') {
+        findUrls(value, path);
+      }
+    }
+  };
+  findUrls(content);
+  return urls;
+}
 
 /**
  * @route   GET /api/page-content
