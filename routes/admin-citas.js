@@ -5,6 +5,32 @@ const { verifyToken } = require('../middlewares/verifyToken');
 const NotificationHelper = require('../helpers/notification.helper');
 
 /**
+ * Normalizar hora al formato HH:MM:SS
+ * Maneja formatos: "HH:MM", "HH:MM:SS", "HH:MM:SS:SS" (error)
+ */
+function normalizarHora(hora) {
+  if (!hora) return null;
+  
+  // Si ya tiene formato correcto HH:MM:SS, retornar
+  if (/^\d{2}:\d{2}:\d{2}$/.test(hora)) {
+    return hora;
+  }
+  
+  // Si tiene formato HH:MM, agregar segundos
+  if (/^\d{2}:\d{2}$/.test(hora)) {
+    return hora + ':00';
+  }
+  
+  // Si tiene formato erróneo (más de 2 partes con :), extraer solo HH:MM
+  const partes = hora.split(':');
+  if (partes.length >= 2) {
+    return `${partes[0]}:${partes[1]}:00`;
+  }
+  
+  return null;
+}
+
+/**
  * GET /api/admin/citas/:id
  * Obtener detalle completo de una cita (con datos del paciente)
  */
@@ -253,13 +279,33 @@ router.put('/:id/reagendar', verifyToken, async (req, res) => {
     const { id } = req.params;
     const { nueva_fecha, nueva_hora_inicio, nueva_hora_fin } = req.body;
 
-    console.log('[ADMIN-CITAS] Reagendando cita:', id, req.body);
+    console.log('[ADMIN-CITAS] Reagendando cita:', id, {
+      nueva_fecha,
+      nueva_hora_inicio,
+      nueva_hora_fin
+    });
 
-    if (!nueva_fecha || !nueva_hora_inicio || !nueva_hora_fin) {
+    // ============================================================
+    // VALIDACIÓN 0: Normalizar horas de entrada
+    // ============================================================
+    const horaInicioNormalizada = normalizarHora(nueva_hora_inicio);
+    const horaFinNormalizada = normalizarHora(nueva_hora_fin);
+
+    if (!nueva_fecha || !horaInicioNormalizada || !horaFinNormalizada) {
       return res.status(400).json({ 
-        message: 'Faltan campos requeridos: nueva_fecha, nueva_hora_inicio, nueva_hora_fin' 
+        message: '❌ Faltan campos requeridos o tienen formato inválido',
+        detalle: {
+          nueva_fecha: !nueva_fecha ? 'requerido' : 'OK',
+          nueva_hora_inicio: !horaInicioNormalizada ? 'formato inválido' : 'OK',
+          nueva_hora_fin: !horaFinNormalizada ? 'formato inválido' : 'OK'
+        }
       });
     }
+
+    console.log('[ADMIN-CITAS] Horas normalizadas:', {
+      inicio: horaInicioNormalizada,
+      fin: horaFinNormalizada
+    });
 
     // ============================================================
     // VALIDACIÓN 1: Verificar que la cita existe
@@ -272,7 +318,10 @@ router.put('/:id/reagendar', verifyToken, async (req, res) => {
 
     if (errorVerificar || !citaExistente) {
       console.error('[ADMIN-CITAS] Cita no encontrada:', { id, error: errorVerificar });
-      return res.status(404).json({ message: 'Cita no encontrada' });
+      return res.status(404).json({ 
+        message: '❌ Cita no encontrada',
+        detalle: 'La cita que intentas reagendar no existe o fue eliminada'
+      });
     }
 
     // Obtener paquete si existe (para validar duración)
@@ -292,27 +341,29 @@ router.put('/:id/reagendar', verifyToken, async (req, res) => {
     // ============================================================
     // VALIDACIÓN 2: Calcular duración del nuevo rango horario
     // ============================================================
-    const [h1, m1] = nueva_hora_inicio.split(':').map(Number);
-    const [h2, m2] = nueva_hora_fin.split(':').map(Number);
+    const [h1, m1] = horaInicioNormalizada.split(':').map(Number);
+    const [h2, m2] = horaFinNormalizada.split(':').map(Number);
     const nuevaDuracionMinutos = (h2 * 60 + m2) - (h1 * 60 + m1);
 
     if (nuevaDuracionMinutos <= 0) {
       return res.status(400).json({
-        message: '❌ La hora de fin debe ser posterior a la hora de inicio.',
-        code: 'HORARIO_INVALIDO'
+        message: '❌ La hora de fin debe ser posterior a la hora de inicio',
+        detalle: {
+          hora_inicio: nueva_hora_inicio,
+          hora_fin: nueva_hora_fin,
+          problema: 'El rango horario no es válido'
+        }
       });
     }
 
     // Validar duración mínima
     if (duracionRequerida && nuevaDuracionMinutos < duracionRequerida) {
       return res.status(400).json({
-        message: `❌ El nuevo bloque horario es demasiado corto. Esta cita requiere ${duracionRequerida} minutos, pero el rango seleccionado (${nueva_hora_inicio} - ${nueva_hora_fin}) solo tiene ${nuevaDuracionMinutos} minutos. Por favor selecciona un rango horario más amplio.`,
-        code: 'DURACION_INSUFICIENTE',
-        detalle: {
-          duracion_requerida: duracionRequerida,
-          duracion_seleccionada: nuevaDuracionMinutos,
-          faltante: duracionRequerida - nuevaDuracionMinutos
-        }
+        message: `❌ Rango horario insuficiente`,
+        detalle: `Esta cita requiere ${duracionRequerida} minutos, pero el rango seleccionado (${nueva_hora_inicio} - ${nueva_hora_fin}) solo tiene ${nuevaDuracionMinutos} minutos.`,
+        sugerencia: `Por favor selecciona un rango horario de al menos ${duracionRequerida} minutos.`,
+        duracion_requerida: duracionRequerida,
+        duracion_seleccionada: nuevaDuracionMinutos
       });
     }
 
@@ -323,15 +374,15 @@ router.put('/:id/reagendar', verifyToken, async (req, res) => {
       .from('citas')
       .select('id, rut_paciente')
       .eq('fecha', nueva_fecha)
-      .eq('hora', nueva_hora_inicio + ':00')
+      .eq('hora', horaInicioNormalizada)
       .neq('id', id)
       .neq('estado', 'cancelada');
 
     if (errorConflicto) {
       console.error('[ADMIN-CITAS] Error al verificar conflictos:', errorConflicto);
       return res.status(500).json({ 
-        message: 'Error al verificar disponibilidad del horario',
-        error: errorConflicto.message 
+        message: '❌ Error al verificar disponibilidad',
+        detalle: 'No se pudo verificar si el horario está disponible. Por favor intenta de nuevo.'
       });
     }
 
@@ -343,21 +394,17 @@ router.put('/:id/reagendar', verifyToken, async (req, res) => {
         .eq('rut', conflictos[0].rut_paciente)
         .maybeSingle();
 
-      const nombrePaciente = pacienteConflicto?.full_name || 'Otro paciente';
+      const nombrePaciente = pacienteConflicto?.full_name || 'otro paciente';
 
       return res.status(409).json({ 
-        message: `❌ El horario ${nueva_fecha} a las ${nueva_hora_inicio} ya está ocupado por ${nombrePaciente}. Por favor elige otro horario.`,
-        code: 'HORARIO_OCUPADO',
-        conflicto: {
-          paciente: nombrePaciente,
-          fecha: nueva_fecha,
-          hora: nueva_hora_inicio
-        }
+        message: `❌ Horario ocupado`,
+        detalle: `El horario ${nueva_fecha} a las ${nueva_hora_inicio} ya está reservado por ${nombrePaciente}.`,
+        sugerencia: 'Por favor elige otro horario disponible.'
       });
     }
 
     // ============================================================
-    // VALIDACIÓN 3: Verificar superposición con otras citas
+    // VALIDACIÓN 4: Verificar superposición con otras citas
     // ============================================================
     // Convertir horas a minutos para comparar rangos
     const nuevoInicio = h1 * 60 + m1;
@@ -393,16 +440,14 @@ router.put('/:id/reagendar', verifyToken, async (req, res) => {
             .eq('rut', citaConflicto?.rut_paciente)
             .maybeSingle();
 
-          const nombrePaciente = pacienteConflicto?.full_name || 'Otro paciente';
+          const nombrePaciente = pacienteConflicto?.full_name || 'otro paciente';
 
           return res.status(409).json({
-            message: `❌ El nuevo rango horario (${nueva_hora_inicio} - ${nueva_hora_fin}) se superpone con otra cita existente de ${nombrePaciente} (${otraCita.hora.substring(0, 5)} - ${otraCita.hora_fin.substring(0, 5)}). Por favor elige un horario sin conflictos.`,
-            code: 'SUPERPOSICION_HORARIA',
-            conflicto: {
-              paciente: nombrePaciente,
-              hora_inicio_conflicto: otraCita.hora.substring(0, 5),
-              hora_fin_conflicto: otraCita.hora_fin.substring(0, 5)
-            }
+            message: `❌ Conflicto de horarios`,
+            detalle: `El rango horario ${nueva_hora_inicio} - ${nueva_hora_fin} se superpone con una cita existente de ${nombrePaciente}.`,
+            sugerencia: `La cita existente es de ${otraCita.hora.substring(0, 5)} a ${otraCita.hora_fin.substring(0, 5)}. Por favor elige un horario sin conflictos.`,
+            hora_inicio_conflicto: otraCita.hora.substring(0, 5),
+            hora_fin_conflicto: otraCita.hora_fin.substring(0, 5)
           });
         }
       }
@@ -411,12 +456,19 @@ router.put('/:id/reagendar', verifyToken, async (req, res) => {
     // ============================================================
     // PASO 4: Actualizar la cita (todas las validaciones pasaron)
     // ============================================================
+    console.log('[ADMIN-CITAS] Actualizando cita con valores normalizados:', {
+      fecha: nueva_fecha,
+      hora: horaInicioNormalizada,
+      hora_fin: horaFinNormalizada,
+      duracion: nuevaDuracionMinutos
+    });
+
     const { data: citaActualizada, error: errorActualizar } = await supabase
       .from('citas')
       .update({
         fecha: nueva_fecha,
-        hora: nueva_hora_inicio + ':00',
-        hora_fin: nueva_hora_fin + ':00',
+        hora: horaInicioNormalizada,
+        hora_fin: horaFinNormalizada,
         duracion: nuevaDuracionMinutos
       })
       .eq('id', id)
@@ -425,13 +477,27 @@ router.put('/:id/reagendar', verifyToken, async (req, res) => {
 
     if (errorActualizar) {
       console.error('[ADMIN-CITAS] Error al reagendar:', errorActualizar);
+      
+      // Mensajes de error más específicos según el código de error
+      let mensaje = 'Error al actualizar la cita';
+      let detalles = errorActualizar.message;
+      
+      if (errorActualizar.code === '22007') {
+        mensaje = '❌ Error en el formato de hora';
+        detalles = 'Las horas proporcionadas tienen un formato inválido. Por favor verifica los datos.';
+      } else if (errorActualizar.code === '23505') {
+        mensaje = '❌ Ya existe una cita en este horario';
+        detalles = 'Otra cita ya ocupa este horario específico.';
+      }
+      
       return res.status(500).json({ 
-        message: 'Error al actualizar la cita. Por favor intenta de nuevo.',
-        error: errorActualizar.message 
+        message: mensaje,
+        detalle: detalles,
+        error_tecnico: errorActualizar.message
       });
     }
 
-    console.log('[ADMIN-CITAS] Cita reagendada:', citaActualizada.id);
+    console.log('[ADMIN-CITAS] Cita reagendada exitosamente:', citaActualizada.id);
 
     // ========================================
     // ENVIAR NOTIFICACIONES POR EMAIL
@@ -468,13 +534,31 @@ router.put('/:id/reagendar', verifyToken, async (req, res) => {
     }
 
     res.json({
-      message: `✅ Cita reagendada exitosamente al ${nueva_fecha} a las ${nueva_hora_inicio}`,
+      message: `✅ Cita reagendada exitosamente`,
+      detalle: `Nueva fecha: ${nueva_fecha} a las ${nueva_hora_inicio}`,
       cita: citaActualizada
     });
 
   } catch (error) {
-    console.error('[ADMIN-CITAS] Error inesperado:', error);
-    res.status(500).json({ message: 'Error interno del servidor', error: error.message });
+    console.error('[ADMIN-CITAS] Error inesperado al reagendar:', error);
+    
+    // Mensaje de error más amigable para el usuario
+    let mensajeUsuario = '❌ Error al reagendar la cita';
+    let detalleError = 'Ocurrió un error inesperado. Por favor intenta de nuevo.';
+    
+    if (error.message) {
+      if (error.message.includes('timeout')) {
+        detalleError = 'La operación tardó demasiado tiempo. Por favor verifica tu conexión e intenta de nuevo.';
+      } else if (error.message.includes('network')) {
+        detalleError = 'Error de conexión con el servidor. Verifica tu conexión a internet.';
+      }
+    }
+    
+    res.status(500).json({ 
+      message: mensajeUsuario, 
+      detalle: detalleError,
+      error_tecnico: error.message 
+    });
   }
 });
 
