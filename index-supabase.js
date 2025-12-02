@@ -68,6 +68,35 @@ app.use((req, res, next) => {
 });
 
 // =====================================================
+// HEALTH CHECK (RENDER)
+// =====================================================
+
+// Ruta raíz para health check de Render (debe ser rápida y sin DB)
+app.get('/', (req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'EMH Psicoterapia Backend',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
+});
+
+// Ruta HEAD para health check
+app.head('/', (req, res) => {
+  res.status(200).end();
+});
+
+// Health check alternativo
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    uptime: process.uptime()
+  });
+});
+
+// =====================================================
 // RUTAS CON SUPABASE (✅ TODAS MIGRADAS)
 // =====================================================
 
@@ -189,20 +218,51 @@ app.use((req, res) => {
 // =====================================================
 // INICIAR SERVIDOR
 // =====================================================
-app.listen(port, '0.0.0.0', () => {
+const HOST = '0.0.0.0'; // Importante para Render
+const server = app.listen(port, HOST, () => {
+  const env = process.env.NODE_ENV || 'development';
+  const isProduction = env === 'production';
+  
   console.log('='.repeat(50));
-  console.log('🚀 SERVIDOR INICIADO');
+  console.log(`🚀 ${isProduction ? 'SERVIDOR INICIADO' : 'Servidor de Desarrollo'}`);
   console.log('='.repeat(50));
   console.log(`📡 Puerto: ${port}`);
-  console.log(`🌍 Entorno: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🌐 Host: ${HOST}`);
+  console.log(`🌍 Entorno: ${env}`);
   console.log(`🗄️  Base de datos: Supabase PostgreSQL`);
-  console.log(`🔗 URL local: http://localhost:${port}`);
+  if (!isProduction) {
+    console.log(`🔗 URL local: http://localhost:${port}`);
+  }
   console.log(`✅ TODAS las rutas migradas a Supabase (11/11)`);
-  console.log(`   - /api/login, /api/blog, /api/citas, /api/tratamientos`);
+  console.log(`   - /api/login, /api/blogs, /api/citas, /api/tratamientos`);
   console.log(`   - /api/talleres, /api/horarios, /api/comentarios`);
   console.log(`   - /api/page-content, /api/media, /api/images, /api/webpay`);
   console.log(`🔥 Firebase completamente eliminado`);
   console.log('='.repeat(50));
+  
+  // Health check interno al iniciar
+  if (isProduction) {
+    console.log('✅ Health check endpoint disponible en /');
+    console.log('✅ Esperando verificación de Render...');
+  }
 });
+
+// Manejo de señales para shutdown graceful (importante para Render)
+const gracefulShutdown = (signal) => {
+  console.log(`\n⚠️  Recibida señal ${signal}, cerrando servidor...`);
+  server.close(() => {
+    console.log('✅ Servidor cerrado correctamente');
+    process.exit(0);
+  });
+  
+  // Force shutdown después de 10 segundos
+  setTimeout(() => {
+    console.error('❌ Forzando cierre del servidor');
+    process.exit(1);
+  }, 10000);
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 module.exports = app;
