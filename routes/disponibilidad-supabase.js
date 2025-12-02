@@ -79,14 +79,14 @@ async function verificarSolapamiento(fecha, horaInicio, horaFin) {
   }
 
   // 2. Verificar reservas pendientes (PENDIENTE o PAGADA en proceso)
-  // Solo consideramos reservas de los últimos 30 minutos (tiempo límite para pagar)
-  const treintaMinutosAtras = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+  // Solo consideramos reservas de los últimos 31 minutos (tiempo límite para pagar + 1 min de margen)
+  const treintaYUnMinutosAtras = new Date(Date.now() - 31 * 60 * 1000).toISOString();
   
   const { data: reservasPendientes, error: reservasError } = await supabase
     .from('reservas_pendientes')
     .select('sesiones')
     .in('estado', ['PENDIENTE', 'PAGADA'])
-    .gte('created_at', treintaMinutosAtras);
+    .gt('created_at', treintaYUnMinutosAtras);
 
   if (reservasError) throw reservasError;
   
@@ -157,6 +157,20 @@ router.get('/disponibilidad/dia/:fecha/:paqueteId', async (req, res) => {
   try {
     const { fecha, paqueteId } = req.params;
     console.log(`[DISPONIBILIDAD][DIA] Params recibidos: fecha=${fecha}, paqueteId=${paqueteId}`);
+    
+    // Validar que la fecha no sea muy lejana (máximo 6 meses en el futuro)
+    const fechaConsulta = new Date(fecha + 'T00:00:00');
+    const seisMesesAdelante = new Date();
+    seisMesesAdelante.setMonth(seisMesesAdelante.getMonth() + 6);
+    
+    if (fechaConsulta > seisMesesAdelante) {
+      return res.status(400).json({
+        success: false,
+        message: 'No se pueden agendar citas con más de 6 meses de anticipación',
+        fecha,
+        maxFecha: seisMesesAdelante.toISOString().split('T')[0]
+      });
+    }
     
     // 1. Obtener información del paquete
     const { data: paquete, error: paqueteError } = await supabase

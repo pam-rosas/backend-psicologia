@@ -639,7 +639,79 @@ router.post('/verify', async (req, res) => {
     }
 
     // ========================================
-    // ACTUALIZAR RESERVA PENDIENTE
+    // VERIFICAR QUE SE CREARON TODAS LAS CITAS
+    // ========================================
+    if (citasCreadas.length === 0) {
+      console.error('❌ CRÍTICO: No se pudo crear ninguna cita a pesar del pago exitoso');
+      
+      // Marcar reserva como "pagada_con_error" en lugar de "pagada"
+      await supabase
+        .from('reservas_pendientes')
+        .update({ 
+          estado: 'pagada_con_error',
+          webpay_response: commitResponse,
+          citas_ids: [],
+          error_message: 'Pago exitoso pero no se pudieron crear las citas',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', reservaPendiente.id);
+      
+      return res.status(500).json({
+        success: false,
+        approved: true,
+        paymentSuccessful: true,
+        criticalError: true,
+        message: 'El pago fue exitoso pero hubo un error al crear las citas. Contacte a soporte con su número de orden.',
+        buyOrder: buyOrder,
+        errors: citasErrores
+      });
+    }
+    
+    if (citasCreadas.length < sesiones.length) {
+      console.warn(`⚠️ ADVERTENCIA: Solo se crearon ${citasCreadas.length} de ${sesiones.length} citas`);
+      
+      // Marcar como "pagada_parcial"
+      const citasIds = citasCreadas.map(c => c.id);
+      await supabase
+        .from('reservas_pendientes')
+        .update({ 
+          estado: 'pagada_parcial',
+          webpay_response: commitResponse,
+          citas_ids: citasIds,
+          error_message: `Solo ${citasCreadas.length} de ${sesiones.length} citas fueron creadas`,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', reservaPendiente.id);
+      
+      return res.status(200).json({
+        success: true,
+        approved: true,
+        partialSuccess: true,
+        message: `Pago exitoso. ${citasCreadas.length} de ${sesiones.length} citas confirmadas. Contacte a soporte para las citas faltantes.`,
+        vci: commitResponse.vci,
+        amount: amount,
+        status: commitResponse.status,
+        buyOrder: buyOrder,
+        sessionId: commitResponse.session_id || commitResponse.sessionId,
+        authorizationCode: authCode,
+        transactionDate: transactionDate,
+        citas: citasCreadas.map(c => ({
+          id: c.id,
+          fecha: c.fecha,
+          hora: c.hora.substring(0, 5),
+          duracion: c.duracion
+        })),
+        errors: citasErrores,
+        paquete: {
+          nombre: paquete.nombre,
+          sesiones: paquete.sesiones,
+          precio: paquete.precio_nacional
+        }
+      });
+    }
+
+    // ========================================
+    // ACTUALIZAR RESERVA PENDIENTE (TODO OK)
     // ========================================
     const citasIds = citasCreadas.map(c => c.id);
 

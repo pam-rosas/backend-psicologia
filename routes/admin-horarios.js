@@ -89,6 +89,25 @@ router.post('/horarios', async (req, res) => {
       if (h.dia_semana === null || h.dia_semana === undefined) {
         throw new Error('dia_semana es requerido para todos los horarios');
       }
+      
+      // Validar formato de hora (HH:mm)
+      const horaRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
+      if (!horaRegex.test(h.hora_inicio)) {
+        throw new Error(`Formato inválido para hora_inicio: ${h.hora_inicio}. Debe ser HH:mm (00:00 - 23:59)`);
+      }
+      if (!horaRegex.test(h.hora_fin)) {
+        throw new Error(`Formato inválido para hora_fin: ${h.hora_fin}. Debe ser HH:mm (00:00 - 23:59)`);
+      }
+      
+      // Validar que hora_inicio < hora_fin
+      const [inicioH, inicioM] = h.hora_inicio.split(':').map(Number);
+      const [finH, finM] = h.hora_fin.split(':').map(Number);
+      const inicioMinutos = inicioH * 60 + inicioM;
+      const finMinutos = finH * 60 + finM;
+      
+      if (inicioMinutos >= finMinutos) {
+        throw new Error(`hora_inicio (${h.hora_inicio}) debe ser menor que hora_fin (${h.hora_fin})`);
+      }
     }
 
     // IMPORTANTE: Deduplicar horarios antes de insertar
@@ -111,11 +130,11 @@ router.post('/horarios', async (req, res) => {
 
     console.log('[DEBUG] Horarios deduplicados a insertar:', JSON.stringify(horariosDeduplicados, null, 2));
 
-    // Eliminar todos los horarios existentes
+    // Eliminar todos los horarios existentes (usando gt para evitar el hack del UUID)
     const { error: deleteError } = await supabase
       .from('horarios_disponibles')
       .delete()
-      .neq('id', '00000000-0000-0000-0000-000000000000'); // Eliminar todos
+      .gte('dia_semana', 0); // Eliminar todos (dia_semana es 0-6)
 
     if (deleteError) {
       console.error('[ERROR] Error al eliminar horarios existentes:', deleteError.message);
@@ -171,6 +190,37 @@ router.put('/horarios/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { dia_semana, hora_inicio, hora_fin, modalidad, activo } = req.body;
+    
+    // Validar formato de hora (HH:mm)
+    const horaRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
+    if (hora_inicio && !horaRegex.test(hora_inicio)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: `Formato inválido para hora_inicio: ${hora_inicio}. Debe ser HH:mm (00:00 - 23:59)` 
+      });
+    }
+    if (hora_fin && !horaRegex.test(hora_fin)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: `Formato inválido para hora_fin: ${hora_fin}. Debe ser HH:mm (00:00 - 23:59)` 
+      });
+    }
+    
+    // Validar que hora_inicio < hora_fin
+    if (hora_inicio && hora_fin) {
+      const [inicioH, inicioM] = hora_inicio.split(':').map(Number);
+      const [finH, finM] = hora_fin.split(':').map(Number);
+      const inicioMinutos = inicioH * 60 + inicioM;
+      const finMinutos = finH * 60 + finM;
+      
+      if (inicioMinutos >= finMinutos) {
+        return res.status(400).json({ 
+          success: false, 
+          message: `hora_inicio (${hora_inicio}) debe ser menor que hora_fin (${hora_fin})` 
+        });
+      }
+    }
+    
     const { data, error } = await supabase
       .from('horarios_disponibles')
       .update({ dia_semana, hora_inicio, hora_fin, modalidad, activo })
