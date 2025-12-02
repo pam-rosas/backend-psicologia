@@ -15,6 +15,9 @@ const requiredVars = {
   'FRONTEND_URL_PROD': { required: false, type: 'url', description: 'URL de producción del frontend' },
   'FRONTEND_URL_CUSTOM': { required: false, type: 'url', description: 'Dominio personalizado' },
   'FRONTEND_URL_CUSTOM_WWW': { required: false, type: 'url', description: 'Dominio con www' },
+  'GMAIL_USER': { required: true, type: 'email', description: 'Email de Gmail para envío de notificaciones' },
+  'GMAIL_APP_PASSWORD': { required: true, type: 'string', description: 'Contraseña de aplicación de Gmail (16 dígitos)' },
+  'ADMIN_EMAIL': { required: true, type: 'email', description: 'Email del administrador para recibir notificaciones' },
 };
 
 let hasErrors = false;
@@ -45,6 +48,14 @@ Object.entries(requiredVars).forEach(([varName, config]) => {
   if (config.type === 'url' && !value.startsWith('http')) {
     console.log(`⚠️  ${varName}: Formato incorrecto (debe ser una URL)`);
     console.log(`   Valor actual: ${value.substring(0, 50)}...`);
+    hasWarnings = true;
+    console.log();
+    return;
+  }
+
+  if (config.type === 'email' && !value.includes('@')) {
+    console.log(`⚠️  ${varName}: Formato incorrecto (debe ser un email válido)`);
+    console.log(`   Valor actual: ${value}`);
     hasWarnings = true;
     console.log();
     return;

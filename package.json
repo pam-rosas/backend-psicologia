@@ -8,6 +8,9 @@
     "setup-db": "node setup-database.js",
     "create-users": "node create-users-supabase.js",
     "check-env": "node check-env.js",
+    "setup-email": "node setup-email.js",
+    "test-email": "node test-email.js",
+    "test-without-email": "node test-without-email.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
