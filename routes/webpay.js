@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { supabase } = require('../db/supabase');
+const NotificationHelper = require('../helpers/notification.helper');
 
 // ==========================================
 // CONFIGURACIÓN DE TRANSBANK SDK
@@ -728,7 +729,32 @@ router.post('/verify', async (req, res) => {
     console.log('✅ Reserva pendiente actualizada a PAGADA');
     console.log('========================================\n');
 
-    // TODO: Enviar email de confirmación
+    // ========================================
+    // ENVIAR NOTIFICACIONES POR EMAIL
+    // ========================================
+    console.log('📧 Enviando notificaciones por email...');
+    
+    try {
+      // Enviar notificación para la primera cita (las demás son sesiones del mismo paquete)
+      const primeraCita = citasCreadas[0];
+      
+      await NotificationHelper.notifyAppointmentConfirmation(
+        {
+          email_paciente: reservaPendiente.email_paciente,
+          nombre_paciente: reservaPendiente.nombre_paciente,
+          telefono_paciente: reservaPendiente.telefono_paciente,
+          fecha: primeraCita.fecha,
+          hora: primeraCita.hora
+        },
+        paquete,
+        buyOrder // ID del pago de Transbank
+      );
+      
+      console.log('✅ Notificaciones enviadas');
+    } catch (emailError) {
+      console.error('⚠️ Error al enviar notificaciones (no crítico):', emailError.message);
+      // No bloqueamos el flujo si falla el email
+    }
 
     res.status(200).json({
       success: true,

@@ -4,6 +4,7 @@ const moment = require('moment-timezone');
 
 /**
  * Helper para formatear datos de cita antes de enviar notificaciones
+ * Utiliza envío asíncrono con cola para no bloquear el sistema
  */
 class NotificationHelper {
   
@@ -28,13 +29,15 @@ class NotificationHelper {
 
   /**
    * Envía notificaciones de confirmación de cita después de una reserva
+   * Usa envío asíncrono para no bloquear la respuesta
    * @param {Object} citaData - Datos de la cita
    * @param {Object} paqueteData - Datos del paquete/tratamiento
    * @param {string} paymentId - ID del pago (opcional)
+   * @param {boolean} async - Si es true, usa cola asíncrona (default: true)
    */
-  static async notifyAppointmentConfirmation(citaData, paqueteData, paymentId = null) {
+  static async notifyAppointmentConfirmation(citaData, paqueteData, paymentId = null, async = true) {
     try {
-      console.log('📧 Enviando notificaciones de confirmación de cita...');
+      console.log('📧 Preparando notificaciones de confirmación de cita...');
 
       const appointmentData = {
         patientEmail: citaData.email_paciente,
@@ -47,40 +50,51 @@ class NotificationHelper {
         paymentId: paymentId
       };
 
-      // Enviar email al paciente
-      try {
-        await emailService.sendAppointmentConfirmation(appointmentData);
-        console.log('✅ Email de confirmación enviado al paciente:', citaData.email_paciente);
-      } catch (error) {
-        console.error('❌ Error enviando email al paciente:', error);
-        // No lanzamos error para no interrumpir el flujo
-      }
+      // Preparar emails
+      const patientEmailData = {
+        to: appointmentData.patientEmail,
+        subject: '✅ Confirmación de Cita - EMH Psicoterapia Online',
+        html: emailService.generateAppointmentConfirmationHTML(appointmentData)
+      };
 
-      // Enviar email al admin
-      try {
-        await emailService.sendAppointmentConfirmationToAdmin(appointmentData);
-        console.log('✅ Email de confirmación enviado al admin');
-      } catch (error) {
-        console.error('❌ Error enviando email al admin:', error);
-        // No lanzamos error para no interrumpir el flujo
-      }
+      const adminEmailData = {
+        to: emailService.adminEmail,
+        subject: '🔔 Nueva Cita Agendada - EMH Psicoterapia Online',
+        html: emailService.generateAdminAppointmentNotificationHTML(appointmentData)
+      };
 
-      return { success: true, message: 'Notificaciones enviadas' };
+      if (async) {
+        // Envío asíncrono - no bloquea la respuesta
+        emailService.queueEmail(patientEmailData);
+        emailService.queueEmail(adminEmailData);
+        console.log('✅ Notificaciones añadidas a la cola de envío');
+        return { success: true, queued: true };
+      } else {
+        // Envío síncrono - espera respuesta (solo para casos críticos)
+        const results = await Promise.allSettled([
+          emailService.sendEmail(patientEmailData),
+          emailService.sendEmail(adminEmailData)
+        ]);
+        console.log('✅ Notificaciones enviadas síncronamente');
+        return { success: true, results };
+      }
     } catch (error) {
-      console.error('❌ Error general en notifyAppointmentConfirmation:', error);
+      console.error('❌ Error preparando notificaciones:', error.message);
       return { success: false, error: error.message };
     }
   }
 
   /**
    * Envía notificaciones de reagendamiento de cita
+   * Usa envío asíncrono para no bloquear la respuesta
    * @param {Object} citaAnterior - Datos de la cita anterior
    * @param {Object} citaNueva - Datos de la nueva cita
    * @param {Object} paqueteData - Datos del paquete/tratamiento
+   * @param {boolean} async - Si es true, usa cola asíncrona (default: true)
    */
-  static async notifyReschedule(citaAnterior, citaNueva, paqueteData) {
+  static async notifyReschedule(citaAnterior, citaNueva, paqueteData, async = true) {
     try {
-      console.log('📧 Enviando notificaciones de reagendamiento...');
+      console.log('📧 Preparando notificaciones de reagendamiento...');
 
       const rescheduleData = {
         patientEmail: citaNueva.email_paciente,
@@ -93,38 +107,51 @@ class NotificationHelper {
         treatmentName: paqueteData.nombre
       };
 
-      // Enviar email al paciente
-      try {
-        await emailService.sendRescheduleConfirmation(rescheduleData);
-        console.log('✅ Email de reagendamiento enviado al paciente:', citaNueva.email_paciente);
-      } catch (error) {
-        console.error('❌ Error enviando email al paciente:', error);
-      }
+      // Preparar emails
+      const patientEmailData = {
+        to: rescheduleData.patientEmail,
+        subject: '📅 Cita Reagendada - EMH Psicoterapia Online',
+        html: emailService.generateRescheduleConfirmationHTML(rescheduleData)
+      };
 
-      // Enviar email al admin
-      try {
-        await emailService.sendRescheduleConfirmationToAdmin(rescheduleData);
-        console.log('✅ Email de reagendamiento enviado al admin');
-      } catch (error) {
-        console.error('❌ Error enviando email al admin:', error);
-      }
+      const adminEmailData = {
+        to: emailService.adminEmail,
+        subject: '📅 Cita Reagendada por Paciente - EMH Psicoterapia Online',
+        html: emailService.generateAdminRescheduleNotificationHTML(rescheduleData)
+      };
 
-      return { success: true, message: 'Notificaciones de reagendamiento enviadas' };
+      if (async) {
+        // Envío asíncrono - no bloquea la respuesta
+        emailService.queueEmail(patientEmailData);
+        emailService.queueEmail(adminEmailData);
+        console.log('✅ Notificaciones de reagendamiento añadidas a la cola');
+        return { success: true, queued: true };
+      } else {
+        // Envío síncrono
+        const results = await Promise.allSettled([
+          emailService.sendEmail(patientEmailData),
+          emailService.sendEmail(adminEmailData)
+        ]);
+        console.log('✅ Notificaciones de reagendamiento enviadas síncronamente');
+        return { success: true, results };
+      }
     } catch (error) {
-      console.error('❌ Error general en notifyReschedule:', error);
+      console.error('❌ Error preparando notificaciones de reagendamiento:', error.message);
       return { success: false, error: error.message };
     }
   }
 
   /**
    * Envía notificaciones de cancelación de cita
+   * Usa envío asíncrono para no bloquear la respuesta
    * @param {Object} citaData - Datos de la cita cancelada
    * @param {Object} paqueteData - Datos del paquete/tratamiento
    * @param {string} reason - Motivo de cancelación (opcional)
+   * @param {boolean} async - Si es true, usa cola asíncrona (default: true)
    */
-  static async notifyCancellation(citaData, paqueteData, reason = null) {
+  static async notifyCancellation(citaData, paqueteData, reason = null, async = true) {
     try {
-      console.log('📧 Enviando notificaciones de cancelación...');
+      console.log('📧 Preparando notificaciones de cancelación...');
 
       const cancellationData = {
         patientEmail: citaData.email_paciente,
@@ -136,25 +163,36 @@ class NotificationHelper {
         reason: reason
       };
 
-      // Enviar email al paciente
-      try {
-        await emailService.sendCancellationConfirmation(cancellationData);
-        console.log('✅ Email de cancelación enviado al paciente:', citaData.email_paciente);
-      } catch (error) {
-        console.error('❌ Error enviando email al paciente:', error);
-      }
+      // Preparar emails
+      const patientEmailData = {
+        to: cancellationData.patientEmail,
+        subject: '❌ Cita Cancelada - EMH Psicoterapia Online',
+        html: emailService.generateCancellationConfirmationHTML(cancellationData)
+      };
 
-      // Enviar email al admin
-      try {
-        await emailService.sendCancellationConfirmationToAdmin(cancellationData);
-        console.log('✅ Email de cancelación enviado al admin');
-      } catch (error) {
-        console.error('❌ Error enviando email al admin:', error);
-      }
+      const adminEmailData = {
+        to: emailService.adminEmail,
+        subject: '❌ Cita Cancelada - EMH Psicoterapia Online',
+        html: emailService.generateAdminCancellationNotificationHTML(cancellationData)
+      };
 
-      return { success: true, message: 'Notificaciones de cancelación enviadas' };
+      if (async) {
+        // Envío asíncrono - no bloquea la respuesta
+        emailService.queueEmail(patientEmailData);
+        emailService.queueEmail(adminEmailData);
+        console.log('✅ Notificaciones de cancelación añadidas a la cola');
+        return { success: true, queued: true };
+      } else {
+        // Envío síncrono
+        const results = await Promise.allSettled([
+          emailService.sendEmail(patientEmailData),
+          emailService.sendEmail(adminEmailData)
+        ]);
+        console.log('✅ Notificaciones de cancelación enviadas síncronamente');
+        return { success: true, results };
+      }
     } catch (error) {
-      console.error('❌ Error general en notifyCancellation:', error);
+      console.error('❌ Error preparando notificaciones de cancelación:', error.message);
       return { success: false, error: error.message };
     }
   }

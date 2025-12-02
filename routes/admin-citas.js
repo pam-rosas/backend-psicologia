@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { supabase } = require('../db/supabase');
 const { verifyToken } = require('../middlewares/verifyToken');
+const NotificationHelper = require('../helpers/notification.helper');
 
 /**
  * GET /api/admin/citas/:id
@@ -432,6 +433,40 @@ router.put('/:id/reagendar', verifyToken, async (req, res) => {
 
     console.log('[ADMIN-CITAS] Cita reagendada:', citaActualizada.id);
 
+    // ========================================
+    // ENVIAR NOTIFICACIONES POR EMAIL
+    // ========================================
+    try {
+      // Obtener datos del paquete si existe
+      let paquete = null;
+      if (citaActualizada.paquete_id) {
+        const { data: paqueteData } = await supabase
+          .from('paquetes')
+          .select('*')
+          .eq('id', citaActualizada.paquete_id)
+          .maybeSingle();
+        paquete = paqueteData;
+      }
+
+      // Si no hay paquete, crear uno temporal con datos de la cita
+      if (!paquete) {
+        paquete = {
+          nombre: 'Sesión de Psicoterapia',
+          precio_nacional: 0
+        };
+      }
+
+      await NotificationHelper.notifyReschedule(
+        citaExistente, // Cita anterior
+        citaActualizada, // Cita nueva
+        paquete
+      );
+      
+      console.log('✅ Notificaciones de reagendamiento enviadas');
+    } catch (emailError) {
+      console.error('⚠️ Error al enviar notificaciones (no crítico):', emailError.message);
+    }
+
     res.json({
       message: `✅ Cita reagendada exitosamente al ${nueva_fecha} a las ${nueva_hora_inicio}`,
       cita: citaActualizada
@@ -477,6 +512,28 @@ router.delete('/:id', verifyToken, async (req, res) => {
     }
 
     console.log('[ADMIN-CITAS] Cita eliminada:', id);
+
+    // Enviar notificaciones de cancelación
+    try {
+      let paquete = null;
+      if (cita.paquete_id) {
+        const { data: paqueteData } = await supabase
+          .from('paquetes')
+          .select('*')
+          .eq('id', cita.paquete_id)
+          .maybeSingle();
+        paquete = paqueteData;
+      }
+      
+      if (!paquete) {
+        paquete = { nombre: 'Sesión de Psicoterapia', precio_nacional: 0 };
+      }
+
+      await NotificationHelper.notifyCancellation(cita, paquete, motivo);
+      console.log('✅ Notificaciones de cancelación enviadas');
+    } catch (emailError) {
+      console.error('⚠️ Error al enviar notificaciones (no crítico):', emailError.message);
+    }
 
     res.json({
       message: 'Cita cancelada correctamente',

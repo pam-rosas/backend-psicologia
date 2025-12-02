@@ -10,6 +10,8 @@
     "check-env": "node check-env.js",
     "setup-email": "node setup-email.js",
     "test-email": "node test-email.js",
+    "test-email-retry": "node test-email-retry.js",
+    "test-render": "node test-render-simulation.js",
     "test-without-email": "node test-without-email.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

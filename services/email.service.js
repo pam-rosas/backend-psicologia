@@ -8,6 +8,17 @@ class EmailService {
     this.transporter = null;
     this.adminEmail = process.env.ADMIN_EMAIL;
     this.isConfigured = false;
+    this.emailQueue = [];
+    this.isProcessingQueue = false;
+    
+    // Detectar si estamos en Render (SMTP bloqueado)
+    this.isRender = process.env.RENDER === 'true' || process.env.RENDER_SERVICE_NAME;
+    
+    // Configuración de retry (adaptativa según entorno)
+    this.maxRetries = this.isRender ? 1 : 3; // Solo 1 intento en Render
+    this.retryDelay = 2000; // 2 segundos entre intentos
+    this.timeout = this.isRender ? 3000 : 15000; // 3s en Render, 15s en otros
+    
     this.initializeTransporter();
   }
 
@@ -16,6 +27,14 @@ class EmailService {
    */
   initializeTransporter() {
     try {
+      // Si estamos en Render, desactivar completamente el email
+      if (this.isRender) {
+        console.warn('🚫 Email service disabled on Render (SMTP ports blocked)');
+        console.warn('   → Emails will be skipped (non-blocking)');
+        this.isConfigured = false;
+        return;
+      }
+
       // Verificar si las variables de entorno están configuradas
       if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
         console.warn('⚠️  Email service not configured (missing GMAIL_USER or GMAIL_APP_PASSWORD)');
@@ -29,10 +48,15 @@ class EmailService {
           user: process.env.GMAIL_USER,
           pass: process.env.GMAIL_APP_PASSWORD
         },
-        // Configuración para evitar timeouts
-        connectionTimeout: 10000, // 10 segundos
-        greetingTimeout: 10000,
-        socketTimeout: 10000
+        // Configuración optimizada para evitar timeouts
+        connectionTimeout: this.timeout, // Usa timeout adaptativo
+        greetingTimeout: Math.min(this.timeout, 10000),
+        socketTimeout: this.timeout,
+        pool: true, // Usar pool de conexiones
+        maxConnections: 5, // Máximo 5 conexiones simultáneas
+        maxMessages: 100, // Máximo 100 mensajes por conexión
+        rateDelta: 1000, // Intervalo de rate limiting
+        rateLimit: 5 // Máximo 5 emails por segundo
       });
 
       this.isConfigured = true;
@@ -42,6 +66,20 @@ class EmailService {
       this.isConfigured = false;
       // NO lanzar error - permitir que la app continúe sin email
     }
+  }
+
+  /**
+   * Sleep utility para delays
+   */
+  sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Sleep utility para delays
+   */
+  sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   /**
@@ -65,21 +103,24 @@ class EmailService {
   }
 
   /**
-   * Envía un email
+   * Envía un email con retry logic y timeout
    * @param {Object} options - Opciones del email
    * @param {string} options.to - Destinatario
    * @param {string} options.subject - Asunto
    * @param {string} options.html - Contenido HTML
    * @param {string} options.text - Contenido texto plano (opcional)
+   * @param {number} options.retryCount - Contador interno de reintentos
    */
-  async sendEmail({ to, subject, html, text }) {
+  async sendEmailWithRetry({ to, subject, html, text, retryCount = 0 }) {
     // Verificar si el servicio está configurado
     if (!this.isConfigured) {
-      console.warn('⚠️  Email service not configured. Email not sent to:', to);
-      console.warn('   Subject:', subject);
+      // Solo log en primer intento para no spam en Render
+      if (retryCount === 0) {
+        console.warn(`⚠️  Email skipped (${this.isRender ? 'Render SMTP blocked' : 'not configured'}): ${subject}`);
+      }
       return { 
         success: false, 
-        error: 'Email service not configured',
+        error: this.isRender ? 'SMTP blocked on Render' : 'Email service not configured',
         skipped: true 
       };
     }
@@ -97,18 +138,99 @@ class EmailService {
         text: text || this.stripHtml(html)
       };
 
-      const info = await this.transporter.sendMail(mailOptions);
-      console.log('✅ Email sent successfully:', info.messageId);
-      return { success: true, messageId: info.messageId };
+      // Crear promesa con timeout
+      const sendPromise = this.transporter.sendMail(mailOptions);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Email timeout exceeded')), this.timeout)
+      );
+
+      const info = await Promise.race([sendPromise, timeoutPromise]);
+      console.log(`✅ Email sent successfully: ${subject} -> ${to} (attempt ${retryCount + 1})`);
+      return { success: true, messageId: info.messageId, attempts: retryCount + 1 };
+
     } catch (error) {
-      console.error('❌ Error sending email:', error.message);
-      // NO lanzar error - retornar información del fallo
-      return { 
-        success: false, 
-        error: error.message,
-        skipped: false
-      };
+      const isLastAttempt = retryCount >= this.maxRetries - 1;
+      
+      if (isLastAttempt) {
+        console.error(`❌ Email failed after ${this.maxRetries} attempts: ${subject} -> ${to}`);
+        console.error(`   Error: ${error.message}`);
+        return { 
+          success: false, 
+          error: error.message,
+          skipped: false,
+          attempts: retryCount + 1
+        };
+      }
+
+      // Retry con exponential backoff
+      const delay = this.retryDelay * Math.pow(2, retryCount);
+      console.warn(`⚠️  Email attempt ${retryCount + 1} failed, retrying in ${delay}ms: ${subject}`);
+      await this.sleep(delay);
+      
+      return await this.sendEmailWithRetry({ 
+        to, 
+        subject, 
+        html, 
+        text, 
+        retryCount: retryCount + 1 
+      });
     }
+  }
+
+  /**
+   * Añade email a la cola para envío asíncrono
+   * @param {Object} emailData - Datos del email
+   */
+  async queueEmail(emailData) {
+    this.emailQueue.push({
+      ...emailData,
+      timestamp: Date.now(),
+      id: `email_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    });
+
+    console.log(`📬 Email queued: ${emailData.subject} (Queue size: ${this.emailQueue.length})`);
+    
+    // Iniciar procesamiento de cola si no está en curso
+    if (!this.isProcessingQueue) {
+      this.processQueue();
+    }
+
+    return { queued: true, queueSize: this.emailQueue.length };
+  }
+
+  /**
+   * Procesa la cola de emails de forma asíncrona
+   */
+  async processQueue() {
+    if (this.isProcessingQueue) {
+      return;
+    }
+
+    this.isProcessingQueue = true;
+    console.log('🚀 Starting email queue processing...');
+
+    while (this.emailQueue.length > 0) {
+      const emailData = this.emailQueue.shift();
+      
+      try {
+        await this.sendEmailWithRetry(emailData);
+        // Pequeño delay entre emails para no saturar
+        await this.sleep(200);
+      } catch (error) {
+        console.error(`❌ Critical error processing email ${emailData.id}:`, error.message);
+        // Continuar con el siguiente email
+      }
+    }
+
+    this.isProcessingQueue = false;
+    console.log('✅ Email queue processing completed');
+  }
+
+  /**
+   * Envía un email (método legacy - ahora usa sendEmailWithRetry)
+   */
+  async sendEmail({ to, subject, html, text }) {
+    return await this.sendEmailWithRetry({ to, subject, html, text });
   }
 
   /**
