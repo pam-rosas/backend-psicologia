@@ -159,11 +159,11 @@ router.get('/disponibilidad/dia/:fecha/:paqueteId', async (req, res) => {
     console.log(`[DISPONIBILIDAD][DIA] Params recibidos: fecha=${fecha}, paqueteId=${paqueteId}`);
     
     // Validar que la fecha no sea muy lejana (máximo 6 meses en el futuro)
-    const fechaConsulta = new Date(fecha + 'T00:00:00');
+    const fechaLimite = new Date(fecha + 'T00:00:00');
     const seisMesesAdelante = new Date();
     seisMesesAdelante.setMonth(seisMesesAdelante.getMonth() + 6);
     
-    if (fechaConsulta > seisMesesAdelante) {
+    if (fechaLimite > seisMesesAdelante) {
       return res.status(400).json({
         success: false,
         message: 'No se pueden agendar citas con más de 6 meses de anticipación',
