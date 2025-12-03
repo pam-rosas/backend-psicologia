@@ -222,11 +222,17 @@ router.post('/init', async (req, res) => {
     // ========================================
     // CREAR TRANSACCIÓN EN WEBPAY
     // ========================================
-    const returnUrl = `${process.env.FRONTEND_URL || 'http://localhost:4200'}/webpay-return`;
+    // Determinar la URL de retorno según el ambiente
+    const frontendUrl = process.env.NODE_ENV === 'production' 
+      ? (process.env.FRONTEND_URL_CUSTOM || process.env.FRONTEND_URL_PROD || 'https://emhpsicoterapia.cl')
+      : (process.env.FRONTEND_URL_LOCAL || 'http://localhost:4200');
+    
+    const returnUrl = `${frontendUrl}/webpay-return`;
     
     console.log('🌐 Creando transacción en Transbank...');
     console.log('   Monto:', monto);
     console.log('   Return URL:', returnUrl);
+    console.log('   Ambiente:', process.env.NODE_ENV || 'development');
 
     const createResponse = await tx.create(
       buyOrder,
