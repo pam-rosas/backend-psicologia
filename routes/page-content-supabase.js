@@ -189,7 +189,7 @@ router.post('/:pageId', verifyToken, async (req, res) => {
 
 /**
  * @route   PUT /api/page-content/:pageId
- * @desc    Actualizar contenido de una página (alias de POST)
+ * @desc    Actualizar contenido de una página (merge con existente)
  * @access  Private (Admin)
  */
 router.put('/:pageId', verifyToken, async (req, res) => {
@@ -199,34 +199,68 @@ router.put('/:pageId', verifyToken, async (req, res) => {
     }
 
     const { pageId } = req.params;
-    const contentData = req.body;
+    const newContent = req.body;
 
-    if (!contentData || Object.keys(contentData).length === 0) {
-      return res.status(400).json({ message: 'El contenido no puede estar vacío' });
+    console.log(`\n📝 ============ UPDATE PAGE CONTENT ============`);
+    console.log(`📄 Página: ${pageId}`);
+    console.log(`📦 Body recibido:`, JSON.stringify(req.body, null, 2));
+    console.log(`📊 Tipo de body:`, typeof req.body);
+    console.log(`🔍 Es objeto:`, req.body && typeof req.body === 'object');
+    console.log(`📏 Claves en body:`, req.body ? Object.keys(req.body) : 'null/undefined');
+
+    if (!newContent || Object.keys(newContent).length === 0) {
+      console.error('❌ Body vacío o inválido');
+      return res.status(400).json({ 
+        message: 'El contenido no puede estar vacío',
+        received: req.body,
+        keys: req.body ? Object.keys(req.body) : []
+      });
     }
 
-    const { data: content, error } = await supabase
+    console.log(`🔧 Campos a actualizar:`, Object.keys(newContent));
+
+    // Obtener contenido existente
+    const { data: existing, error: getError } = await supabase
       .from('page_content')
-      .update({ 
-        content_json: contentData 
-      })
+      .select('*')
       .eq('page_id', pageId)
-      .is('deleted_at', null)
-      .select()
-      .single();
+      .maybeSingle();
 
-    if (error) throw error;
+    if (getError) throw getError;
 
-    if (!content) {
+    if (!existing) {
       return res.status(404).json({ message: 'Contenido de página no encontrado' });
     }
 
+    // Hacer merge profundo del contenido existente con el nuevo
+    const mergedContent = {
+      ...existing.content,
+      ...newContent
+    };
+
+    console.log(`✅ Merge completado. Total de claves:`, Object.keys(mergedContent).length);
+
+    // Actualizar en la base de datos
+    const { data: updated, error: updateError } = await supabase
+      .from('page_content')
+      .update({ 
+        content: mergedContent,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', existing.id)
+      .select()
+      .single();
+
+    if (updateError) throw updateError;
+
+    console.log(`✅ Contenido actualizado correctamente en DB`);
+
     res.status(200).json({ 
       message: 'Contenido actualizado exitosamente',
-      content 
+      content: updated.content
     });
   } catch (error) {
-    console.error('Error al actualizar contenido:', error);
+    console.error('❌ Error al actualizar contenido:', error);
     res.status(500).json({ 
       message: 'Error al actualizar contenido', 
       error: error.message 
